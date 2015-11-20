@@ -1,4 +1,5 @@
 /bin/
+/packages/
 intermediate/
 *.opensdf
 *.sdf
