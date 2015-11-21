@@ -46,6 +46,23 @@ struct scene_object
     float3 position;
 };
 
+scene_object * raycast(const ray & ray, std::vector<scene_object> & objects)
+{
+    scene_object * best = nullptr;
+    float t, best_t;
+    for(auto & obj : objects)
+    {
+        auto r = ray;
+        r.origin -= obj.position;
+        if(intersect_ray_mesh(r, *obj.mesh, &t) && (!best || t < best_t))
+        {
+            best = &obj;
+            best_t = t;
+        }
+    }
+    return best;
+}
+
 float3 get_center_of_mass(const std::set<scene_object *> & objects)
 {
     float3 sum;
@@ -132,17 +149,12 @@ int main(int argc, char * argv[])
 
             if(selection.empty() || g.ctrl)
             {
-                for(auto & obj : objects)
+                if(auto picked_object = raycast(g.get_ray_from_pixel(g.cursor), objects))
                 {
-                    auto ray = g.get_ray_from_pixel(g.cursor);
-                    ray.origin -= obj.position;
-                    if(intersect_ray_mesh(ray, *obj.mesh))
-                    {
-                        auto it = selection.find(&obj);
-                        if(it == end(selection)) selection.insert(&obj);
-                        else selection.erase(it);
-                        g.gizmode = gizmo_mode::none;
-                    }
+                    auto it = selection.find(picked_object);
+                    if(it == end(selection)) selection.insert(picked_object);
+                    else selection.erase(it);
+                    g.gizmode = gizmo_mode::none;
                 }
             }
         }
