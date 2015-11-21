@@ -95,6 +95,26 @@ geometry_mesh make_box_geometry(const float3 & min_bounds, const float3 & max_bo
     return mesh;
 }
 
+const float tau = 6.2831853f;
+
+geometry_mesh make_cylinder_geometry(const float3 & axis, const float3 & arm1, const float3 & arm2, int slices)
+{
+    geometry_mesh mesh;
+    for(int i=0; i<=slices; ++i)
+    {
+        const float s = static_cast<float>(i%slices) / slices;
+        const float3 arm = arm1 * std::cos(s*tau) + arm2 * std::sin(s*tau);
+        mesh.vertices.push_back({arm, normalize(arm), {s,0}});
+        mesh.vertices.push_back({arm + axis, normalize(arm), {s,1}});
+    }
+    for(int i=0; i<slices; ++i)
+    {
+        mesh.triangles.push_back({i*2, i*2+2, i*2+3});
+        mesh.triangles.push_back({i*2, i*2+3, i*2+1});
+    }
+    return mesh;
+}
+
 #include <cstdlib>
 #include <GLFW\glfw3.h>
 #pragma comment(lib, "opengl32.lib")
@@ -131,8 +151,12 @@ struct camera
     float4x4 get_viewproj_matrix(float aspect) const { return get_projection_matrix(aspect) * get_view_matrix(); }
 };
 
+enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
+
 struct gui
 {
+    geometry_mesh gizmo_meshes[6];
+
     int2 window_size;               // Size in pixels of the current window
     bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
     bool ml_down, ml_up;            // Whether the left mouse was pressed or released during this frame
@@ -141,7 +165,10 @@ struct gui
 
     camera cam;                     // Current 3D camera used to render the scene
     int focus_id;                   // ID of object which has the focus
+    float3 gizmo_position;          // Position in which the gizmo will be drawn
+    gizmo_mode gizmode;             // Mode that the gizmo is currently in
     float3 original_position;       // Original position of an object being manipulated with a gizmo
+    float3 click_offset;            // Offset from position of grabbed object to coordinates of clicked point
 
     float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix((float)window_size.x/window_size.y); }
 
@@ -173,7 +200,7 @@ void move_wasd(gui & g, float speed)
 
 void plane_translation_gizmo(gui & g, const float3 & plane_normal, float3 & point)
 {
-    if(g.ml_down) g.original_position = point;
+    if(g.ml_down) { g.original_position = point; }
 
     if(g.ml)
     {
@@ -197,8 +224,7 @@ void axis_translation_gizmo(gui & g, const float3 & axis, float3 & point)
     if(g.ml)
     {
         // First apply a plane translation gizmo with a plane that contains the desired axis and is oriented to face the camera
-        const float3 forward = -qzdir(g.cam.get_orientation());
-        const float3 plane_tangent = cross(axis, forward);
+        const float3 plane_tangent = cross(axis, point - g.cam.position);
         const float3 plane_normal = cross(axis, plane_tangent);
         plane_translation_gizmo(g, plane_normal, point);
 
@@ -207,8 +233,59 @@ void axis_translation_gizmo(gui & g, const float3 & axis, float3 & point)
     }
 }
 
+void position_gizmo(gui & g, float3 & position)
+{
+    if(g.ml_down)
+    {
+        g.gizmode = gizmo_mode::none;
+        auto ray = g.get_ray_from_pixel(g.cursor);
+        ray.origin -= position;
+        float t;           
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[0], &t)) g.gizmode = gizmo_mode::translate_x;
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[1], &t)) g.gizmode = gizmo_mode::translate_y;
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[2], &t)) g.gizmode = gizmo_mode::translate_z;
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[3], &t)) g.gizmode = gizmo_mode::translate_yz;
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[4], &t)) g.gizmode = gizmo_mode::translate_zx;
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[5], &t)) g.gizmode = gizmo_mode::translate_xy;
+        if(g.gizmode != gizmo_mode::none) g.click_offset = ray.origin + ray.direction*t;
+    }
+
+    if(g.gizmode != gizmo_mode::none)
+    {
+        position += g.click_offset;
+        switch(g.gizmode)
+        {
+        case gizmo_mode::translate_x: axis_translation_gizmo(g, {1,0,0}, position); break;
+        case gizmo_mode::translate_y: axis_translation_gizmo(g, {0,1,0}, position); break;
+        case gizmo_mode::translate_z: axis_translation_gizmo(g, {0,0,1}, position); break;
+        case gizmo_mode::translate_yz: plane_translation_gizmo(g, {1,0,0}, position); break;
+        case gizmo_mode::translate_zx: plane_translation_gizmo(g, {0,1,0}, position); break;
+        case gizmo_mode::translate_xy: plane_translation_gizmo(g, {0,0,1}, position); break;
+        }        
+        position -= g.click_offset;
+    }
+    g.gizmo_position = position;
+}
+
+void mesh_position_gizmo(gui & g, int id, const geometry_mesh & mesh, float3 & position)
+{
+    if(g.focus_id == id)
+    {
+        position_gizmo(g, position);
+    }
+    else if(g.ml_down)
+    {
+        auto ray = g.get_ray_from_pixel(g.cursor);
+        ray.origin -= position;
+        if(intersect_ray_mesh(ray, mesh))
+        {
+            g.focus_id = id;
+            g.gizmode = gizmo_mode::none;
+        }
+    }
+}
+
 gui g;
-float3 box_position = {-1,0,0};
 
 #include <iostream>
 
@@ -219,6 +296,16 @@ int main(int argc, char * argv[])
     g.cam.near_clip = 0.1f;
     g.cam.far_clip = 16.0f;
     g.cam.position = {0,0,4};
+
+    g.gizmo_meshes[0] = make_cylinder_geometry({1,0,0}, {0,0.05f,0}, {0,0,0.05f}, 12);
+    g.gizmo_meshes[1] = make_cylinder_geometry({0,1,0}, {0,0,0.05f}, {0.05f,0,0}, 12);
+    g.gizmo_meshes[2] = make_cylinder_geometry({0,0,1}, {0.05f,0,0}, {0,0.05f,0}, 12);
+    g.gizmo_meshes[3] = make_box_geometry({-0.01f,0,0}, {0.01f,0.4f,0.4f});
+    g.gizmo_meshes[4] = make_box_geometry({0,-0.01f,0}, {0.4f,0.01f,0.4f});
+    g.gizmo_meshes[5] = make_box_geometry({0,0,-0.01f}, {0.4f,0.4f,0.01f});
+
+    auto box_mesh = make_box_geometry({-0.5f,-0.5f,-0.5f}, {0.5f,0.5f,0.5f});
+    std::vector<float3> boxes = {{-1,0,0}, {+1,0,0}};
 
     glfwInit();
     auto win = glfwCreateWindow(g.window_size.x, g.window_size.y, "Basic Workbench App", nullptr, nullptr);
@@ -248,7 +335,6 @@ int main(int argc, char * argv[])
         g.cursor = cursor;
     });
 
-    auto box = make_box_geometry({-1,-1,-1}, {1,1,1});
 
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
@@ -262,35 +348,43 @@ int main(int argc, char * argv[])
         t0 = t1;
 
         if(g.mr) do_mouselook(g, 0.01f);
-        move_wasd(g, 4.0f);
-        if(g.ml_down)
-        {
-            auto ray = g.get_ray_from_pixel(g.cursor);
-            ray.origin -= box_position;
-            if(intersect_ray_mesh(ray, box)) g.focus_id = 1;
-            else g.focus_id = 0;
-        }
-        if(g.focus_id == 1)
-        {
-            axis_translation_gizmo(g, {1,0,0}, box_position);
-        }
+        move_wasd(g, 8.0f);
+        for(auto & box : boxes) mesh_position_gizmo(g, &box - boxes.data() + 1, box_mesh, box);
 
         int w,h;
         glfwGetFramebufferSize(win, &w, &h);
         glfwMakeContextCurrent(win);
         glViewport(0, 0, w, h);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glMatrixMode(GL_PROJECTION);
         gl_load_matrix(perspective_matrix(1.0f, (float)w/h, 0.1f, 16.0f));
 
-        glMatrixMode(GL_MODELVIEW);
         glEnable(GL_LIGHTING);
         glEnable(GL_LIGHT0);
         glLightfv(GL_LIGHT0, GL_POSITION, begin(normalize(float4(0.1f, 0.9f, 0.3f, 0))));
+
+        glEnable(GL_COLOR_MATERIAL);
+        glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
-        gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(box_position));
-        render_geometry(box);
+        glMatrixMode(GL_MODELVIEW);
+        for(auto & box : boxes)
+        {            
+            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(box));
+            glColor3f(1,1,1); render_geometry(box_mesh);
+        }
+
+        if(g.focus_id)
+        {
+            glClear(GL_DEPTH_BUFFER_BIT);
+            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(g.gizmo_position));
+            glColor3f(1,0,0); render_geometry(g.gizmo_meshes[0]);
+            glColor3f(0,1,0); render_geometry(g.gizmo_meshes[1]);
+            glColor3f(0,0,1); render_geometry(g.gizmo_meshes[2]);
+            glColor3f(0,1,1); render_geometry(g.gizmo_meshes[3]);
+            glColor3f(1,0,1); render_geometry(g.gizmo_meshes[4]);
+            glColor3f(1,1,0); render_geometry(g.gizmo_meshes[5]);
+        }
 
         glfwSwapBuffers(win);
     }
