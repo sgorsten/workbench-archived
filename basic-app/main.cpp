@@ -10,10 +10,56 @@ float4x4 rotation_matrix(const float4 & rotation)                               
 float4x4 frustum_matrix(float l, float r, float b, float t, float n, float f)   { return {{2*n/(r-l),0,0,0}, {0,2*n/(t-b),0,0}, {(r+l)/(r-l),(t+b)/(t-b),-(f+n)/(f-n),-1}, {0,0,-2*f*n/(f-n),0}}; }
 float4x4 perspective_matrix(float fovy, float aspect, float n, float f)         { float y = n*std::tan(fovy/2), x=y*aspect; return frustum_matrix(-x,x,-y,y,n,f); }
 
+struct ray { float3 origin, direction; };
+
+bool intersect_ray_triangle(const ray & ray, const float3 & v0, const float3 & v1, const float3 & v2, float * hit_t = 0, float2 * hit_uv = 0)
+{
+    auto e1 = v1 - v0, e2 = v2 - v0, h = cross(ray.direction, e2);
+    auto a = dot(e1, h);
+    if (a > -0.0001f && a < 0.0001f) return {false};
+
+    float f = 1 / a;
+    auto s = ray.origin - v0;
+	auto u = f * dot(s, h);
+	if (u < 0 || u > 1) return false;
+
+	auto q = cross(s, e1);
+	auto v = f * dot(ray.direction, q);
+	if (v < 0 || u + v > 1) return false;
+
+    auto t = f * dot(e2, q);
+    if(t < 0) return false;
+
+    if(hit_t) *hit_t = t;
+    if(hit_uv) *hit_uv = {u,v};
+    return true;
+}
+
 #include <vector>
 
 struct geometry_vertex { float3 position, normal; float2 texcoords; };
 struct geometry_mesh { std::vector<geometry_vertex> vertices; std::vector<int3> triangles; };
+
+bool intersect_ray_mesh(const ray & ray, const geometry_mesh & mesh, float * hit_t = 0, int * hit_tri = 0, float2 * hit_uv = 0)
+{
+    float best_t = std::numeric_limits<float>::infinity(), t;
+    float2 best_uv, uv;
+    int best_tri = -1;
+    for(auto & tri : mesh.triangles)
+    {
+        if(intersect_ray_triangle(ray, mesh.vertices[tri[0]].position, mesh.vertices[tri[1]].position, mesh.vertices[tri[2]].position, &t, &uv) && t < best_t)
+        {
+            best_t = t;
+            best_uv = uv;
+            best_tri = &tri - mesh.triangles.data();
+        }
+    }
+    if(best_tri == -1) return false;
+    if(hit_t) *hit_t = best_t;
+    if(hit_tri) *hit_tri = best_tri;
+    if(hit_uv) *hit_uv = best_uv;
+    return true;
+}
 
 geometry_mesh make_box_geometry(const float3 & min_bounds, const float3 & max_bounds)
 {
@@ -94,16 +140,17 @@ struct gui
     float timestep;                 // Timestep between the last frame and this one
 
     camera cam;                     // Current 3D camera used to render the scene
-    float3 original_position;
+    int focus_id;                   // ID of object which has the focus
+    float3 original_position;       // Original position of an object being manipulated with a gizmo
 
     float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix((float)window_size.x/window_size.y); }
 
-    float3 get_ray_from_pixel(const float2 & coord) const
+    ray get_ray_from_pixel(const float2 & coord) const
     {
         const float x = 2 * cursor.x / window_size.x - 1, y = 1 - 2 * cursor.y / window_size.y;
         const float4x4 inv_view_proj = inverse(get_viewproj_matrix());
         const float4 p0 = inv_view_proj * float4(x, y, -1, 1), p1 = inv_view_proj * float4(x, y, +1, 1);
-        return p1.xyz()*p0.w - p0.xyz()*p1.w;
+        return {cam.position, p1.xyz()*p0.w - p0.xyz()*p1.w};
     }
 };
 
@@ -121,7 +168,7 @@ void move_wasd(gui & g, float speed)
     if(g.bl) move -= qxdir(orientation);
     if(g.bb) move += qzdir(orientation);
     if(g.br) move += qxdir(orientation);
-    g.cam.position += move * (speed * g.timestep);
+    if(mag2(move) > 0) g.cam.position += normalize(move) * (speed * g.timestep);
 }
 
 void plane_translation_gizmo(gui & g, const float3 & plane_normal, float3 & point)
@@ -130,29 +177,32 @@ void plane_translation_gizmo(gui & g, const float3 & plane_normal, float3 & poin
 
     if(g.ml)
     {
+        // Define the plane to contain the original position of the object
         const float3 plane_point = g.original_position;
 
-        const float3 ray_origin = g.cam.position;
-        const float3 ray_direction = g.get_ray_from_pixel(g.cursor);
-        const float t = dot(plane_point - ray_origin, plane_normal) / dot(ray_direction, plane_normal);
-        if(t < 0) return;
+        // Define a ray emitting from the camera underneath the cursor
+        const ray ray = g.get_ray_from_pixel(g.cursor);
 
-        point = ray_origin + ray_direction * t;
+        // If an intersection exists between the ray and the plane, place the object at that point
+        const float denom = dot(ray.direction, plane_normal);
+        if(std::abs(denom) == 0) return;
+        const float t = dot(plane_point - ray.origin, plane_normal) / denom;
+        if(t < 0) return;
+        point = ray.origin + ray.direction * t;
     }
 }
 
 void axis_translation_gizmo(gui & g, const float3 & axis, float3 & point)
 {
-    if(g.ml_down) g.original_position = point;
-
     if(g.ml)
     {
+        // First apply a plane translation gizmo with a plane that contains the desired axis and is oriented to face the camera
         const float3 forward = -qzdir(g.cam.get_orientation());
         const float3 plane_tangent = cross(axis, forward);
         const float3 plane_normal = cross(axis, plane_tangent);
-
         plane_translation_gizmo(g, plane_normal, point);
 
+        // Constrain object motion to be along the desired axis
         point = g.original_position + axis * dot(point - g.original_position, axis);
     }
 }
@@ -187,7 +237,7 @@ int main(int argc, char * argv[])
     {
         switch(button)
         {
-        case GLFW_MOUSE_BUTTON_LEFT: g.ml = action != GLFW_RELEASE; g.ml ? g.ml_down : g.ml_up = true; break;
+        case GLFW_MOUSE_BUTTON_LEFT: g.ml = action != GLFW_RELEASE; (g.ml ? g.ml_down : g.ml_up) = true; break;
         case GLFW_MOUSE_BUTTON_RIGHT: g.mr = action != GLFW_RELEASE; break;
         }
     });
@@ -213,8 +263,17 @@ int main(int argc, char * argv[])
 
         if(g.mr) do_mouselook(g, 0.01f);
         move_wasd(g, 4.0f);
-        //plane_translation_gizmo(g, {0,1,0}, box_position);
-        axis_translation_gizmo(g, {1,0,0}, box_position);
+        if(g.ml_down)
+        {
+            auto ray = g.get_ray_from_pixel(g.cursor);
+            ray.origin -= box_position;
+            if(intersect_ray_mesh(ray, box)) g.focus_id = 1;
+            else g.focus_id = 0;
+        }
+        if(g.focus_id == 1)
+        {
+            axis_translation_gizmo(g, {1,0,0}, box_position);
+        }
 
         int w,h;
         glfwGetFramebufferSize(win, &w, &h);
