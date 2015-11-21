@@ -121,6 +121,7 @@ geometry_mesh make_cylinder_geometry(const float3 & axis, const float3 & arm1, c
 
 void gl_load_matrix(const float4x4 & m) { glLoadMatrixf(&m.x.x); }
 void gl_tex_coord(const float2 & v) { glTexCoord2fv(begin(v)); }
+void gl_color(const float3 & v) { glColor3fv(begin(v)); }
 void gl_normal(const float3 & v) { glNormal3fv(begin(v)); }
 void gl_vertex(const float3 & v) { glVertex3fv(begin(v)); }
 
@@ -378,12 +379,12 @@ int main(int argc, char * argv[])
         {
             glClear(GL_DEPTH_BUFFER_BIT);
             gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(g.gizmo_position));
-            glColor3f(1,0,0); render_geometry(g.gizmo_meshes[0]);
-            glColor3f(0,1,0); render_geometry(g.gizmo_meshes[1]);
-            glColor3f(0,0,1); render_geometry(g.gizmo_meshes[2]);
-            glColor3f(0,1,1); render_geometry(g.gizmo_meshes[3]);
-            glColor3f(1,0,1); render_geometry(g.gizmo_meshes[4]);
-            glColor3f(1,1,0); render_geometry(g.gizmo_meshes[5]);
+            gl_color(g.gizmode == gizmo_mode::translate_x ? float3(1,0.5f,0.5f) : float3(1,0,0)); render_geometry(g.gizmo_meshes[0]);
+            gl_color(g.gizmode == gizmo_mode::translate_y ? float3(0.5f,1,0.5f) : float3(0,1,0)); render_geometry(g.gizmo_meshes[1]);
+            gl_color(g.gizmode == gizmo_mode::translate_z ? float3(0.5f,0.5f,1) : float3(0,0,1)); render_geometry(g.gizmo_meshes[2]);
+            gl_color(g.gizmode == gizmo_mode::translate_yz ? float3(0.5f,1,1) : float3(0,1,1)); render_geometry(g.gizmo_meshes[3]);
+            gl_color(g.gizmode == gizmo_mode::translate_zx ? float3(1,0.5f,1) : float3(1,0,1)); render_geometry(g.gizmo_meshes[4]);
+            gl_color(g.gizmode == gizmo_mode::translate_xy ? float3(1,1,0.5f) : float3(1,1,0)); render_geometry(g.gizmo_meshes[5]);
         }
 
         glfwSwapBuffers(win);
