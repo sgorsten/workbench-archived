@@ -39,24 +39,6 @@ void render_gizmo(const gui & g)
     gl_color(g.gizmode == gizmo_mode::translate_xy ? float3(1,1,0.5f) : float3(1,1,0)); render_geometry(g.gizmo_meshes[5]);
 }
 
-void mesh_position_gizmo(gui & g, int id, const geometry_mesh & mesh, float3 & position)
-{
-    if(g.focus_id == id)
-    {
-        position_gizmo(g, position);
-    }
-    else if(g.ml_down)
-    {
-        auto ray = g.get_ray_from_pixel(g.cursor);
-        ray.origin -= position;
-        if(intersect_ray_mesh(ray, mesh))
-        {
-            g.focus_id = id;
-            g.gizmode = gizmo_mode::none;
-        }
-    }
-}
-
 struct scene_object
 {
     const geometry_mesh * mesh;
@@ -112,7 +94,7 @@ int main(int argc, char * argv[])
         g->cursor = cursor;
     });
 
-
+    scene_object * selected_object = nullptr;
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
@@ -126,7 +108,28 @@ int main(int argc, char * argv[])
 
         if(g.mr) do_mouselook(g, 0.01f);
         move_wasd(g, 8.0f);
-        for(auto & obj : objects) mesh_position_gizmo(g, &obj - objects.data() + 1, *obj.mesh, obj.position);
+
+        if(selected_object) position_gizmo(g, selected_object->position);
+
+        if(g.ml)
+        {
+            if(selected_object && g.gizmode == gizmo_mode::none) selected_object = nullptr;
+
+            if(!selected_object)
+            {
+                for(auto & obj : objects)
+                {
+                    auto ray = g.get_ray_from_pixel(g.cursor);
+                    ray.origin -= obj.position;
+                    if(intersect_ray_mesh(ray, *obj.mesh))
+                    {
+                        selected_object = &obj;
+                        g.gizmode = gizmo_mode::none;
+                    }
+                }
+            }
+        }
+        
 
         int w,h;
         glfwGetFramebufferSize(win, &w, &h);
@@ -134,30 +137,43 @@ int main(int argc, char * argv[])
         glViewport(0, 0, w, h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+
         glMatrixMode(GL_PROJECTION);
         gl_load_matrix(perspective_matrix(1.0f, (float)w/h, 0.1f, 16.0f));
+
+        glMatrixMode(GL_MODELVIEW);
+        gl_load_matrix(g.cam.get_view_matrix());
+        glEnable(GL_DEPTH_TEST);
+        glBegin(GL_LINES);
+        for(int i=-5; i<=5; ++i)
+        {
+            glVertex3i(i, 0, -5);
+            glVertex3i(i, 0, +5);
+            glVertex3i(-5, 0, i);
+            glVertex3i(+5, 0, i);
+        }
+        glEnd();
 
         glEnable(GL_LIGHTING);
         glEnable(GL_LIGHT0);
         glLightfv(GL_LIGHT0, GL_POSITION, begin(normalize(float4(0.1f, 0.9f, 0.3f, 0))));
-
         glEnable(GL_COLOR_MATERIAL);
-        glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
-        glMatrixMode(GL_MODELVIEW);
         for(const auto & obj : objects)
         {            
             gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(obj.position));
             glColor3f(1,1,1); render_geometry(*obj.mesh);
         }
 
-        if(g.focus_id)
+        if(selected_object)
         {
             glClear(GL_DEPTH_BUFFER_BIT);
-            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(g.gizmo_position));
+            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(selected_object->position));
             render_gizmo(g);
         }
 
+        glPopAttrib();
         glfwSwapBuffers(win);
     }
     glfwTerminate();

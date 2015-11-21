@@ -3,7 +3,7 @@
 
 #include "ui.h"
 
-gui::gui() : bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(), cam({}), focus_id(), gizmode() 
+gui::gui() : bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(), cam({}), gizmode() 
 {
     gizmo_meshes[0] = make_cylinder_geometry({1,0,0}, {0,0.05f,0}, {0,0,0.05f}, 12);
     gizmo_meshes[1] = make_cylinder_geometry({0,1,0}, {0,0,0.05f}, {0.05f,0,0}, 12);
@@ -109,7 +109,4 @@ void position_gizmo(gui & g, float3 & position)
         }        
         position -= g.click_offset;
     }
-
-    // Store the gizmo position for later use by the renderer
-    g.gizmo_position = position;
 }

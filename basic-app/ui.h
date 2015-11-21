@@ -30,8 +30,6 @@ struct gui
     float timestep;                 // Timestep between the last frame and this one
 
     camera cam;                     // Current 3D camera used to render the scene
-    int focus_id;                   // ID of object which has the focus
-    float3 gizmo_position;          // Position in which the gizmo will be drawn
     gizmo_mode gizmode;             // Mode that the gizmo is currently in
     float3 original_position;       // Original position of an object being manipulated with a gizmo
     float3 click_offset;            // Offset from position of grabbed object to coordinates of clicked point
