@@ -1,14 +1,33 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="geometry.cpp" />
+    <ClCompile Include="geometry.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="ui.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="linalg.h" />
-    <ClInclude Include="geometry.h" />
+    <ClInclude Include="geometry.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="linalg.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="ui.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{f2d73800-16d5-4c5e-ab7b-83b3f3d3e78f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>
