@@ -53,26 +53,26 @@ geometry_mesh make_box_geometry(const float3 & min_bounds, const float3 & max_bo
     const auto a = min_bounds, b = max_bounds;
     geometry_mesh mesh;
     mesh.vertices = {
-        {{a.x, a.y, a.z}, {-1,0,0}, {0,0}},
-        {{a.x, a.y, b.z}, {-1,0,0}, {1,0}},
-        {{a.x, b.y, b.z}, {-1,0,0}, {1,1}},
-        {{a.x, b.y, a.z}, {-1,0,0}, {0,1}},
+        {{a.x, a.y, a.z}, {-1,0,0}, {1,0}},
+        {{a.x, a.y, b.z}, {-1,0,0}, {0,0}},
+        {{a.x, b.y, b.z}, {-1,0,0}, {0,1}},
+        {{a.x, b.y, a.z}, {-1,0,0}, {1,1}},
         {{b.x, a.y, a.z}, {+1,0,0}, {0,0}},
         {{b.x, b.y, a.z}, {+1,0,0}, {1,0}},
         {{b.x, b.y, b.z}, {+1,0,0}, {1,1}},
         {{b.x, a.y, b.z}, {+1,0,0}, {0,1}},
-        {{a.x, a.y, a.z}, {0,-1,0}, {0,0}},
-        {{b.x, a.y, a.z}, {0,-1,0}, {1,0}},
-        {{b.x, a.y, b.z}, {0,-1,0}, {1,1}},
-        {{a.x, a.y, b.z}, {0,-1,0}, {0,1}},
+        {{a.x, a.y, a.z}, {0,-1,0}, {1,0}},
+        {{b.x, a.y, a.z}, {0,-1,0}, {0,0}},
+        {{b.x, a.y, b.z}, {0,-1,0}, {0,1}},
+        {{a.x, a.y, b.z}, {0,-1,0}, {1,1}},
         {{a.x, b.y, a.z}, {0,+1,0}, {0,0}},
         {{a.x, b.y, b.z}, {0,+1,0}, {1,0}},
         {{b.x, b.y, b.z}, {0,+1,0}, {1,1}},
         {{b.x, b.y, a.z}, {0,+1,0}, {0,1}},
-        {{a.x, a.y, a.z}, {0,0,-1}, {0,0}},
-        {{a.x, b.y, a.z}, {0,0,-1}, {1,0}},
-        {{b.x, b.y, a.z}, {0,0,-1}, {1,1}},
-        {{b.x, a.y, a.z}, {0,0,-1}, {0,1}},
+        {{a.x, a.y, a.z}, {0,0,-1}, {1,0}},
+        {{a.x, b.y, a.z}, {0,0,-1}, {0,0}},
+        {{b.x, b.y, a.z}, {0,0,-1}, {0,1}},
+        {{b.x, a.y, a.z}, {0,0,-1}, {1,1}},
         {{a.x, a.y, b.z}, {0,0,+1}, {0,0}},
         {{b.x, a.y, b.z}, {0,0,+1}, {1,0}},
         {{b.x, b.y, b.z}, {0,0,+1}, {1,1}},
@@ -88,10 +88,10 @@ geometry_mesh make_cylinder_geometry(const float3 & axis, const float3 & arm1, c
     geometry_mesh mesh;
     for(int i=0; i<=slices; ++i)
     {
-        const float s = static_cast<float>(i%slices) / slices;
-        const float3 arm = arm1 * std::cos(s*tau) + arm2 * std::sin(s*tau);
-        mesh.vertices.push_back({arm, normalize(arm), {s,0}});
-        mesh.vertices.push_back({arm + axis, normalize(arm), {s,1}});
+        const float tex_s = static_cast<float>(i) / slices, angle = (float)(i%slices) * tau / slices;
+        const float3 arm = arm1 * std::cos(angle) + arm2 * std::sin(angle);
+        mesh.vertices.push_back({arm, normalize(arm), {tex_s,0}});
+        mesh.vertices.push_back({arm + axis, normalize(arm), {tex_s,1}});
     }
     for(int i=0; i<slices; ++i)
     {

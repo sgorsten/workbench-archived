@@ -122,6 +122,25 @@ int main(int argc, char * argv[])
         g->cursor = cursor;
     });
 
+    glfwMakeContextCurrent(win);
+
+    float image[16][16];
+    for(int i=0; i<16; ++i)
+    {
+        for(int j=0; j<16; ++j)
+        {
+            image[i][j] = ((i/4 + j/4) % 2) 
+                ? ((i+j) % 2 ? 0.8f : 0.6f)
+                : ((i+j) % 2 ? 0.2f : 0.1f);
+        }
+    }
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_LUMINANCE, GL_FLOAT, image);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
@@ -161,7 +180,6 @@ int main(int argc, char * argv[])
 
         int w,h;
         glfwGetFramebufferSize(win, &w, &h);
-        glfwMakeContextCurrent(win);
         glViewport(0, 0, w, h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -183,6 +201,7 @@ int main(int argc, char * argv[])
         }
         glEnd();
 
+        glEnable(GL_TEXTURE_2D);
         glEnable(GL_LIGHTING);
         glEnable(GL_LIGHT0);
         glLightfv(GL_LIGHT0, GL_POSITION, begin(normalize(float4(0.1f, 0.9f, 0.3f, 0))));
@@ -197,6 +216,7 @@ int main(int argc, char * argv[])
         if(!selection.empty())
         {
             glClear(GL_DEPTH_BUFFER_BIT);
+            glDisable(GL_TEXTURE_2D);
             gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(get_center_of_mass(selection)));
             render_gizmo(g);
         }
