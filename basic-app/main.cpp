@@ -4,6 +4,7 @@
 #include "ui.h"
 
 #include <cstdlib>
+#include <set>
 #include <GLFW\glfw3.h>
 #pragma comment(lib, "opengl32.lib")
 
@@ -45,6 +46,13 @@ struct scene_object
     float3 position;
 };
 
+float3 get_center_of_mass(const std::set<scene_object *> & objects)
+{
+    float3 sum;
+    for(auto obj : objects) sum += obj->position;
+    return sum / (float)objects.size();
+}
+
 int main(int argc, char * argv[])
 {
     gui g;
@@ -57,6 +65,7 @@ int main(int argc, char * argv[])
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
     std::vector<scene_object> objects = {{&box, {-1,0,0}}, {&cylinder, {0,0,0}}, {&box, {+1,0,0}}};
+    std::set<scene_object *> selection;
 
     glfwInit();
     auto win = glfwCreateWindow(g.window_size.x, g.window_size.y, "Basic Workbench App", nullptr, nullptr);
@@ -80,6 +89,8 @@ int main(int argc, char * argv[])
     glfwSetMouseButtonCallback(win, [](GLFWwindow * win, int button, int action, int mods)
     {
         auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
+        g->ctrl = (mods & GLFW_MOD_CONTROL) != 0;
+        g->shift = (mods & GLFW_MOD_SHIFT) != 0;
         switch(button)
         {
         case GLFW_MOUSE_BUTTON_LEFT: g->ml = action != GLFW_RELEASE; (g->ml ? g->ml_down : g->ml_up) = true; break;
@@ -94,7 +105,6 @@ int main(int argc, char * argv[])
         g->cursor = cursor;
     });
 
-    scene_object * selected_object = nullptr;
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
@@ -109,13 +119,18 @@ int main(int argc, char * argv[])
         if(g.mr) do_mouselook(g, 0.01f);
         move_wasd(g, 8.0f);
 
-        if(selected_object) position_gizmo(g, selected_object->position);
-
-        if(g.ml)
+        if(!selection.empty())
         {
-            if(selected_object && g.gizmode == gizmo_mode::none) selected_object = nullptr;
+            float3 com = get_center_of_mass(selection), new_com = com;
+            position_gizmo(g, new_com);
+            if(new_com != com) for(auto obj : selection) obj->position += new_com - com;
+        }
 
-            if(!selected_object)
+        if(g.ml_down)
+        {
+            if(!selection.empty() && g.gizmode == gizmo_mode::none && !g.ctrl) selection.clear();
+
+            if(selection.empty() || g.ctrl)
             {
                 for(auto & obj : objects)
                 {
@@ -123,13 +138,14 @@ int main(int argc, char * argv[])
                     ray.origin -= obj.position;
                     if(intersect_ray_mesh(ray, *obj.mesh))
                     {
-                        selected_object = &obj;
+                        auto it = selection.find(&obj);
+                        if(it == end(selection)) selection.insert(&obj);
+                        else selection.erase(it);
                         g.gizmode = gizmo_mode::none;
                     }
                 }
             }
         }
-        
 
         int w,h;
         glfwGetFramebufferSize(win, &w, &h);
@@ -160,16 +176,16 @@ int main(int argc, char * argv[])
         glLightfv(GL_LIGHT0, GL_POSITION, begin(normalize(float4(0.1f, 0.9f, 0.3f, 0))));
         glEnable(GL_COLOR_MATERIAL);
         glEnable(GL_CULL_FACE);
-        for(const auto & obj : objects)
+        for(auto & obj : objects)
         {            
             gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(obj.position));
-            glColor3f(1,1,1); render_geometry(*obj.mesh);
+            gl_color(selection.find(&obj) == end(selection) ? float3(1,1,1) : float3(1,1,0.8f)); render_geometry(*obj.mesh);
         }
 
-        if(selected_object)
+        if(!selection.empty())
         {
             glClear(GL_DEPTH_BUFFER_BIT);
-            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(selected_object->position));
+            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(get_center_of_mass(selection)));
             render_gizmo(g);
         }
 

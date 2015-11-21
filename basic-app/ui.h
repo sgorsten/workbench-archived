@@ -24,6 +24,7 @@ struct gui
     geometry_mesh gizmo_meshes[6];
 
     int2 window_size;               // Size in pixels of the current window
+    bool ctrl, shift;               // Whether at least one control or shift key is being held down
     bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
     bool ml_down, ml_up;            // Whether the left mouse was pressed or released during this frame
     float2 cursor, delta;           // Current pixel coordinates of cursor, as well as the amount by which the cursor has moved
