@@ -149,7 +149,7 @@ int main(int argc, char * argv[])
 
             if(selection.empty() || g.ctrl)
             {
-                if(auto picked_object = raycast(g.get_ray_from_pixel(g.cursor), objects))
+                if(auto picked_object = raycast(g.get_ray_from_cursor(), objects))
                 {
                     auto it = selection.find(picked_object);
                     if(it == end(selection)) selection.insert(picked_object);

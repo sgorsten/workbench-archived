@@ -3,6 +3,14 @@
 
 #include "ui.h"
 
+ray camera::get_ray_from_pixel(const float2 & pixel, const int2 & viewport) const
+{
+    const float x = 2 * pixel.x / viewport.x - 1, y = 1 - 2 * pixel.y / viewport.y;
+    const float4x4 inv_view_proj = inverse(get_viewproj_matrix((float)viewport.x/viewport.y));
+    const float4 p0 = inv_view_proj * float4(x, y, -1, 1), p1 = inv_view_proj * float4(x, y, +1, 1);
+    return {position, p1.xyz()*p0.w - p0.xyz()*p1.w};
+}
+
 gui::gui() : bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(), cam({}), gizmode() 
 {
     gizmo_meshes[0] = make_cylinder_geometry({1,0,0}, {0,0.05f,0}, {0,0,0.05f}, 12);
@@ -13,13 +21,7 @@ gui::gui() : bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(),
     gizmo_meshes[5] = make_box_geometry({0,0,-0.01f}, {0.4f,0.4f,0.01f});
 }
 
-ray gui::get_ray_from_pixel(const float2 & coord) const
-{
-    const float x = 2 * cursor.x / window_size.x - 1, y = 1 - 2 * cursor.y / window_size.y;
-    const float4x4 inv_view_proj = inverse(get_viewproj_matrix());
-    const float4 p0 = inv_view_proj * float4(x, y, -1, 1), p1 = inv_view_proj * float4(x, y, +1, 1);
-    return {cam.position, p1.xyz()*p0.w - p0.xyz()*p1.w};
-}
+
 
 void do_mouselook(gui & g, float sensitivity)
 {
@@ -48,7 +50,7 @@ void plane_translation_gizmo(gui & g, const float3 & plane_normal, float3 & poin
         const float3 plane_point = g.original_position;
 
         // Define a ray emitting from the camera underneath the cursor
-        const ray ray = g.get_ray_from_pixel(g.cursor);
+        const ray ray = g.get_ray_from_cursor();
 
         // If an intersection exists between the ray and the plane, place the object at that point
         const float denom = dot(ray.direction, plane_normal);
@@ -79,7 +81,7 @@ void position_gizmo(gui & g, float3 & position)
     if(g.ml_down)
     {
         g.gizmode = gizmo_mode::none;
-        auto ray = g.get_ray_from_pixel(g.cursor);
+        auto ray = g.get_ray_from_cursor();
         ray.origin -= position;
         float t;           
         if(intersect_ray_mesh(ray, g.gizmo_meshes[0], &t)) g.gizmode = gizmo_mode::translate_x;

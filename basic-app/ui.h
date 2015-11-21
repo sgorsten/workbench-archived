@@ -17,6 +17,7 @@ struct camera
     float4x4 get_view_matrix() const { return rotation_matrix(qconj(get_orientation())) * translation_matrix(-position); }
     float4x4 get_projection_matrix(float aspect) const { return perspective_matrix(yfov, aspect, near_clip, far_clip); }
     float4x4 get_viewproj_matrix(float aspect) const { return get_projection_matrix(aspect) * get_view_matrix(); }
+    ray get_ray_from_pixel(const float2 & pixel, const int2 & viewport) const;
 };
 
 struct gui
@@ -38,7 +39,7 @@ struct gui
     gui();
 
     float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix((float)window_size.x/window_size.y); }
-    ray get_ray_from_pixel(const float2 & coord) const;
+    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor, window_size); }
 };
 
 void do_mouselook(gui & g, float sensitivity);
