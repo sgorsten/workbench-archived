@@ -47,7 +47,11 @@ void mesh_position_gizmo(gui & g, int id, const geometry_mesh & mesh, float3 & p
     }
 }
 
-#include <iostream>
+struct scene_object
+{
+    const geometry_mesh * mesh;
+    float3 position;
+};
 
 int main(int argc, char * argv[])
 {
@@ -56,10 +60,11 @@ int main(int argc, char * argv[])
     g.cam.yfov = 1.0f;
     g.cam.near_clip = 0.1f;
     g.cam.far_clip = 16.0f;
-    g.cam.position = {0,0,4};
+    g.cam.position = {0,1.5f,4};
 
-    auto box_mesh = make_box_geometry({-0.5f,-0.5f,-0.5f}, {0.5f,0.5f,0.5f});
-    std::vector<float3> boxes = {{-1,0,0}, {+1,0,0}};
+    const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
+    const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
+    std::vector<scene_object> objects = {{&box, {-1,0,0}}, {&cylinder, {0,0,0}}, {&box, {+1,0,0}}};
 
     glfwInit();
     auto win = glfwCreateWindow(g.window_size.x, g.window_size.y, "Basic Workbench App", nullptr, nullptr);
@@ -111,7 +116,7 @@ int main(int argc, char * argv[])
 
         if(g.mr) do_mouselook(g, 0.01f);
         move_wasd(g, 8.0f);
-        for(auto & box : boxes) mesh_position_gizmo(g, &box - boxes.data() + 1, box_mesh, box);
+        for(auto & obj : objects) mesh_position_gizmo(g, &obj - objects.data() + 1, *obj.mesh, obj.position);
 
         int w,h;
         glfwGetFramebufferSize(win, &w, &h);
@@ -130,10 +135,10 @@ int main(int argc, char * argv[])
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
         glMatrixMode(GL_MODELVIEW);
-        for(auto & box : boxes)
+        for(const auto & obj : objects)
         {            
-            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(box));
-            glColor3f(1,1,1); render_geometry(box_mesh);
+            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(obj.position));
+            glColor3f(1,1,1); render_geometry(*obj.mesh);
         }
 
         if(g.focus_id)

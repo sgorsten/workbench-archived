@@ -84,6 +84,7 @@ geometry_mesh make_box_geometry(const float3 & min_bounds, const float3 & max_bo
 
 geometry_mesh make_cylinder_geometry(const float3 & axis, const float3 & arm1, const float3 & arm2, int slices)
 {
+    // Generated curved surface
     geometry_mesh mesh;
     for(int i=0; i<=slices; ++i)
     {
@@ -96,6 +97,21 @@ geometry_mesh make_cylinder_geometry(const float3 & axis, const float3 & arm1, c
     {
         mesh.triangles.push_back({i*2, i*2+2, i*2+3});
         mesh.triangles.push_back({i*2, i*2+3, i*2+1});
+    }
+
+    // Generate caps
+    int base = mesh.vertices.size();
+    for(int i=0; i<slices; ++i)
+    {
+        const float angle = static_cast<float>(i%slices) * tau / slices, c = std::cos(angle), s = std::sin(angle);
+        const float3 arm = arm1 * c + arm2 * s;
+        mesh.vertices.push_back({arm + axis, normalize(axis), {c*0.5f+0.5f, s*0.5f+0.5f}});
+        mesh.vertices.push_back({arm, -normalize(axis), {c*0.5f+0.5f, 0.5f-s*0.5f}});
+    }
+    for(int i=2; i<slices; ++i)
+    {
+        mesh.triangles.push_back({base, base+i*2-2, base+i*2});
+        mesh.triangles.push_back({base+1, base+i*2+1, base+i*2-1});
     }
     return mesh;
 }
