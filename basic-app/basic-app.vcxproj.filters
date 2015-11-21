@@ -6,4 +6,7 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="linalg.h" />
+  </ItemGroup>
 </Project>
