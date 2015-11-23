@@ -31,6 +31,34 @@ gui::gui() : bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(),
     gizmo_meshes[5] = make_box_geometry({0,0,-0.01f}, {0.4f,0.4f,0.01f});
 }
 
+bool gui::is_pressed(int id) const
+{
+    if(pressed_id.size() != current_id.size() + 1) return false;
+    for(size_t i=0; i<current_id.size(); ++i) if(pressed_id[i] != current_id[i]) return false;
+    return pressed_id.back() == id;
+}
+
+void gui::set_pressed(int id)
+{
+    pressed_id = current_id;
+    pressed_id.push_back(id);
+}
+
+void gui::clear_pressed()
+{
+    pressed_id.clear();
+}
+
+void gui::begin_childen(int id)
+{
+    current_id.push_back(id);
+}
+
+void gui::end_children()
+{
+    current_id.pop_back();
+}
+
 void gui::begin_frame(const int2 & window_size)
 {
     this->window_size = window_size;
@@ -49,10 +77,12 @@ void gui::begin_overlay()
 {
     lists.back().last = vertices.size();
     lists.push_back({lists.back().level + 1, vertices.size()});
+    scissor.push_back(scissor.front()); // Overlays are not constrained by parent scissor rect
 }
 
 void gui::end_overlay()
 {
+    scissor.pop_back();
     lists.back().last = vertices.size();
     lists.push_back({lists.back().level - 1, vertices.size()});
 }
@@ -164,6 +194,30 @@ void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
             p.x += glyph->advance;
         }
     }
+}
+
+void vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset)
+{
+    if(g.is_pressed(id))
+    {
+        if(g.ml_up) g.clear_pressed();
+        else offset = (static_cast<int>(g.cursor.y - g.click_offset.y) * client_height - r.y0) / r.height();
+    }    
+
+    if(r.contains(int2(g.cursor))) offset -= static_cast<int>(g.scroll.y * 20);
+    offset = std::min(offset, client_height - r.height());
+    offset = std::max(offset, 0);
+    if(client_height <= r.height()) return;
+
+    draw_rect(g, {r.x1-12, r.y0, r.x1, r.y1}, {0.5f,0.5f,0.5f,1}); // Track
+
+    rect tab = {r.x1-12, r.y0 + offset * r.height() / client_height, r.x1, r.y0 + (offset + r.height()) * r.height() / client_height};
+    if(g.ml_down && tab.contains(int2(g.cursor)))
+    {
+        g.set_pressed(id);
+        g.click_offset.y = g.cursor.y - tab.y0;
+    }
+    draw_rounded_rect(g, tab, 5, {0.8f,0.8f,0.8f,1}); // Tab
 }
 
 void do_mouselook(gui & g, float sensitivity)

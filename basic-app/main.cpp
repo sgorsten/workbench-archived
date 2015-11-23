@@ -5,6 +5,8 @@
 
 #include <cstdlib>
 #include <set>
+#include <sstream>
+#include <algorithm>
 #include <GLFW\glfw3.h>
 #pragma comment(lib, "opengl32.lib")
 
@@ -70,6 +72,35 @@ float3 get_center_of_mass(const std::set<scene_object *> & objects)
     return sum / (float)objects.size();
 }
 
+void object_list_ui(gui & g, int id, const rect & r, std::vector<scene_object> & objects, std::set<scene_object *> & selection, int & offset)
+{
+    draw_rect(g, r, {0.3f,0.3f,0.3f,1});
+    vscroll_panel(g, 1, r, objects.size()*30+20, offset);
+    g.begin_childen(id);
+    g.begin_scissor(r);
+    int y0 = 10 - offset;
+    for(size_t i=0; i<objects.size(); ++i)
+    {
+        rect list_entry = {r.x0 + 10, y0, r.x1 - 10, y0 + 30};
+        if(g.ml_down && list_entry.contains(int2(g.cursor)))
+        {
+            if(!g.ctrl) selection.clear();
+            auto it = selection.find(&objects[i]);
+            if(it == end(selection)) selection.insert(&objects[i]);
+            else selection.erase(it);
+            g.gizmode = gizmo_mode::none;
+        }
+
+        bool selected = selection.find(&objects[i]) != end(selection);
+        std::ostringstream ss; ss << "Object " << (i+1);
+        draw_text(g, {r.x0 + 11, y0 + 1}, float4(0,0,0,1), ss.str());
+        draw_text(g, {r.x0 + 10, y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), ss.str());
+        y0 += 30;
+    }
+    g.end_scissor();
+    g.end_children();
+}
+
 int main(int argc, char * argv[])
 {
     gui g;
@@ -115,6 +146,11 @@ int main(int argc, char * argv[])
         g->delta = cursor - g->cursor;
         g->cursor = cursor;
     });
+    glfwSetScrollCallback(win, [](GLFWwindow * win, double x, double y)
+    {
+        auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
+        g->scroll = {static_cast<float>(x), static_cast<float>(y)};
+    });
 
     glfwMakeContextCurrent(win);
 
@@ -141,11 +177,11 @@ int main(int argc, char * argv[])
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-
+    int offset = 0;
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
-        g.delta = {0,0};
+        g.scroll = g.delta = {0,0};
         g.ml_down = g.ml_up = false;
         glfwPollEvents();
 
@@ -183,9 +219,8 @@ int main(int argc, char * argv[])
             }
         }
 
-        draw_rounded_rect(g, {20,20,200,50}, 4, {0.5f,0.5f,0.5f,1}, {0.3f,0.3f,0.3f,1});
-        draw_text(g, {33,33}, {0,0,0,1}, "Hello world!");
-        draw_text(g, {32,32}, {1,1,1,1}, "Hello world!");
+        // Draw 2D UI
+        object_list_ui(g, 1, {w-200, 0, w, h}, objects, selection, offset);
         g.end_frame();
 
         glfwGetFramebufferSize(win, &w, &h);
