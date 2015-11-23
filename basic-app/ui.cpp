@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cctype>
 #include <algorithm>
+#include <sstream>
 
 ray camera::get_ray_from_pixel(const float2 & pixel, const int2 & viewport) const
 {
@@ -342,18 +343,28 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
     return changed;
 }
 
-#include <sstream>
-
 bool edit(gui & g, int id, const rect & r, float & number)
 {
     std::ostringstream ss;
     ss << number;
     std::string text = ss.str();
     if(!edit(g, id, r, text)) return false;
-
-    std::istringstream(text) >> number;
-    return true;
+    return !!(std::istringstream(text) >> number);
 }
+
+template<class T, int N> bool edit_vector(gui & g, int id, const rect & r, linalg::vec<T,N> & vec)
+{
+    bool changed = false;
+    g.begin_childen(id);
+    const int w = r.width() - (N-1)*2;    
+    for(int i=0; i<N; ++i) changed |= edit(g, i, {r.x0 + w*i/N + i*2, r.y0, r.x0 + w*(i+1)/N + i*2, r.y1}, vec[i]);
+    g.end_children();
+    return changed;
+}
+
+bool edit(gui & g, int id, const rect & r, float2 & vec) { return edit_vector(g, id, r, vec); }
+bool edit(gui & g, int id, const rect & r, float3 & vec) { return edit_vector(g, id, r, vec); }
+bool edit(gui & g, int id, const rect & r, float4 & vec) { return edit_vector(g, id, r, vec); }
 
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset)
 {

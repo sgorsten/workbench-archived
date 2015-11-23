@@ -108,6 +108,11 @@ void draw_text(gui & g, int2 p, const float4 & c, const std::string & text);
 // 2D gui widgets
 bool edit(gui & g, int id, const rect & r, std::string & text);
 bool edit(gui & g, int id, const rect & r, float & number);
+bool edit(gui & g, int id, const rect & r, float2 & vec);
+bool edit(gui & g, int id, const rect & r, float3 & vec);
+bool edit(gui & g, int id, const rect & r, float4 & vec);
+bool edit_vector(gui & g, int id, const rect & r, float data[], int size);
+template<int N> bool edit(gui & g, int id, const rect & r, linalg::vec<float,N> & vec) { return edit_vector(g, id, r, begin(vec), N); }
 
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset);
 std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split);
