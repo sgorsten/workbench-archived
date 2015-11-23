@@ -12,25 +12,17 @@
 #pragma comment(lib, "opengl32.lib")
 
 void gl_load_matrix(const float4x4 & m) { glLoadMatrixf(&m.x.x); }
-void gl_tex_coord(const float2 & v) { glTexCoord2fv(begin(v)); }
 void gl_color(const float3 & v) { glColor3fv(begin(v)); }
-void gl_normal(const float3 & v) { glNormal3fv(begin(v)); }
-void gl_vertex(const float3 & v) { glVertex3fv(begin(v)); }
 
 void render_geometry(const geometry_mesh & mesh)
 {
-    glBegin(GL_TRIANGLES);
-    for(auto & tri : mesh.triangles)
-    {
-        for(auto index : tri)
-        {
-            auto & vert = mesh.vertices[index];
-            gl_tex_coord(vert.texcoords);
-            gl_normal(vert.normal);
-            gl_vertex(vert.position);
-        }
-    }
-    glEnd();
+    const GLenum states[] = {GL_VERTEX_ARRAY, GL_NORMAL_ARRAY, GL_TEXTURE_COORD_ARRAY};
+    for(auto s : states) glEnableClientState(s);
+    glVertexPointer(3, GL_FLOAT, sizeof(geometry_vertex), &mesh.vertices.data()->position);
+    glNormalPointer(GL_FLOAT, sizeof(geometry_vertex), &mesh.vertices.data()->normal);
+    glTexCoordPointer(2, GL_FLOAT, sizeof(geometry_vertex), &mesh.vertices.data()->texcoords);
+    glDrawElements(GL_TRIANGLES, mesh.triangles.size()*3, GL_UNSIGNED_INT, mesh.triangles.data());
+    for(auto s : states) glDisableClientState(s);
 }
 
 void render_gizmo(const gui & g)
@@ -41,6 +33,22 @@ void render_gizmo(const gui & g)
     gl_color(g.gizmode == gizmo_mode::translate_yz ? float3(0.5f,1,1) : float3(0,1,1)); render_geometry(g.gizmo_meshes[3]);
     gl_color(g.gizmode == gizmo_mode::translate_zx ? float3(1,0.5f,1) : float3(1,0,1)); render_geometry(g.gizmo_meshes[4]);
     gl_color(g.gizmode == gizmo_mode::translate_xy ? float3(1,1,0.5f) : float3(1,1,0)); render_geometry(g.gizmo_meshes[5]);
+}
+
+void render_gui(const gui & g, GLuint glyph_tex)
+{
+    glMatrixMode(GL_PROJECTION); glLoadIdentity(); glOrtho(0, g.window_size.x, g.window_size.y, 0, -1, +1);
+    glMatrixMode(GL_MODELVIEW); glLoadIdentity();
+    glEnable(GL_TEXTURE_2D); glBindTexture(GL_TEXTURE_2D, glyph_tex);
+    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    const GLenum states[] = {GL_VERTEX_ARRAY, GL_COLOR_ARRAY, GL_TEXTURE_COORD_ARRAY};
+    for(auto s : states) glEnableClientState(s);
+    glVertexPointer(2, GL_SHORT, sizeof(gui::vertex), &g.vertices.data()->position);
+    glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(gui::vertex), &g.vertices.data()->color);
+    glTexCoordPointer(2, GL_FLOAT, sizeof(gui::vertex), &g.vertices.data()->texcoord);
+    for(const auto & list : g.lists) glDrawArrays(GL_QUADS, list.first, list.last - list.first);
+    for(auto s : states) glDisableClientState(s);
 }
 
 struct scene_object
@@ -361,32 +369,7 @@ int main(int argc, char * argv[])
 
         end_3d();
 
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glOrtho(0, w, h, 0, -1, +1);
-
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-
-        glDisable(GL_DEPTH_TEST);
-
-        glDisable(GL_LIGHTING);
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, font_tex);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        
-        const auto * vertex = g.vertices.data();
-        glVertexPointer(2, GL_SHORT, sizeof(*vertex), &vertex->position);
-        glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(*vertex), &vertex->color);
-        glTexCoordPointer(2, GL_FLOAT, sizeof(*vertex), &vertex->texcoord);
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_COLOR_ARRAY);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        for(const auto & list : g.lists) glDrawArrays(GL_QUADS, list.first, list.last - list.first);
-        glDisableClientState(GL_VERTEX_ARRAY);
-        glDisableClientState(GL_COLOR_ARRAY);
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        render_gui(g, font_tex);
 
         glPopAttrib();
 
