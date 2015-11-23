@@ -160,9 +160,9 @@ rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, s
         }
     }
 
-    if(g.is_pressed(id))
+    if(g.mr)
     {
-        if(g.mr) do_mouselook(g, 0.01f);
+        do_mouselook(g, 0.01f);
         move_wasd(g, 8.0f);
     }
     return r;
