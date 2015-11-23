@@ -73,7 +73,6 @@ float3 get_center_of_mass(const std::set<scene_object *> & objects)
 int main(int argc, char * argv[])
 {
     gui g;
-    g.window_size = {1280,720};
     g.cam.yfov = 1.0f;
     g.cam.near_clip = 0.1f;
     g.cam.far_clip = 16.0f;
@@ -85,13 +84,8 @@ int main(int argc, char * argv[])
     std::set<scene_object *> selection;
 
     glfwInit();
-    auto win = glfwCreateWindow(g.window_size.x, g.window_size.y, "Basic Workbench App", nullptr, nullptr);
+    auto win = glfwCreateWindow(1280, 720, "Basic Workbench App", nullptr, nullptr);
     glfwSetWindowUserPointer(win, &g);
-    glfwSetWindowSizeCallback(win, [](GLFWwindow * win, int w, int h)
-    { 
-        auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
-        g->window_size = {w,h}; 
-    });
     glfwSetKeyCallback(win, [](GLFWwindow * win, int key, int scancode, int action, int mods)
     {
         auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
@@ -155,6 +149,10 @@ int main(int argc, char * argv[])
         g.ml_down = g.ml_up = false;
         glfwPollEvents();
 
+        int w,h;
+        glfwGetWindowSize(win, &w, &h);
+        g.begin_frame({w, h});
+
         const double t1 = glfwGetTime();
         g.timestep = static_cast<float>(t1-t0);
         t0 = t1;
@@ -185,12 +183,11 @@ int main(int argc, char * argv[])
             }
         }
 
-        g.begin_frame();
-        draw_rounded_rect(g, {20,20,200,50}, 4, {0.5f,0.5f,0.5f,1});
+        draw_rounded_rect(g, {20,20,200,50}, 4, {0.5f,0.5f,0.5f,1}, {0.3f,0.3f,0.3f,1});
+        draw_text(g, {33,33}, {0,0,0,1}, "Hello world!");
         draw_text(g, {32,32}, {1,1,1,1}, "Hello world!");
         g.end_frame();
 
-        int w,h;
         glfwGetFramebufferSize(win, &w, &h);
         glViewport(0, 0, w, h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

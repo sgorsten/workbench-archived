@@ -36,6 +36,7 @@ struct gui
     struct list { size_t level,first,last; };
     std::vector<vertex> vertices;
     std::vector<list> lists;
+    std::vector<rect> scissor;
 
     font default_font;
     GLuint font_tex;
@@ -56,12 +57,15 @@ struct gui
     gui();
 
     // API for rendering 2D glyphs
-    void begin_frame();
+    void begin_frame(const int2 & window_size);
     void end_frame();
     void begin_overlay();
     void end_overlay();
+    void begin_scissor(const rect & r);
+    void end_scissor();
     void add_glyph(const rect & r, float s0, float t0, float s1, float t1, const float4 & top_color, const float4 & bottom_color);
 
+    // API for doing computations in 3D space
     float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix((float)window_size.x/window_size.y); }
     ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor, window_size); }
 };

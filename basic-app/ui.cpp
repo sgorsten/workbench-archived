@@ -31,10 +31,12 @@ gui::gui() : bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(),
     gizmo_meshes[5] = make_box_geometry({0,0,-0.01f}, {0.4f,0.4f,0.01f});
 }
 
-void gui::begin_frame()
+void gui::begin_frame(const int2 & window_size)
 {
+    this->window_size = window_size;
     vertices.clear();
     lists = {{0, 0}};
+    scissor.push_back({0, 0, window_size.x, window_size.y});
 }
 
 void gui::end_frame()
@@ -55,13 +57,70 @@ void gui::end_overlay()
     lists.push_back({lists.back().level - 1, vertices.size()});
 }
 
-void gui::add_glyph(const rect & r, float s0, float t0, float s1, float t1, const float4 & top_color, const float4 & bottom_color)
+void gui::begin_scissor(const rect & r)
 {
-    const auto c0 = byte4(top_color * 255.0f), c1 = byte4(bottom_color * 255.0f);
-    vertices.push_back({short2(r.x0, r.y0), c0, {s0, t0}});
-    vertices.push_back({short2(r.x1, r.y0), c0, {s1, t0}});
-    vertices.push_back({short2(r.x1, r.y1), c1, {s1, t1}});
-    vertices.push_back({short2(r.x0, r.y1), c1, {s0, t1}});
+    const auto & s = scissor.back();
+    scissor.push_back({std::max(s.x0, r.x0), std::max(s.y0, r.y0), std::min(s.x1, r.x1), std::min(s.y1, r.y1)});
+}
+
+void gui::end_scissor()
+{
+    scissor.pop_back();
+}
+
+float lerp(float a, float b, float t) { return a*(1-t) + b*t; }
+
+void gui::add_glyph(const rect & r_, float s0, float t0, float s1, float t1, const float4 & top_color, const float4 & bottom_color)
+{
+    // Discard fully clipped glyphs
+    const auto & s = scissor.back();
+    if(r_.x0 >= s.x1) return;
+    if(r_.x1 <= s.x0) return;
+    if(r_.y0 >= s.y1) return;
+    if(r_.y1 <= s.y0) return;
+
+    auto r = r_;
+    auto c0 = top_color, c1 = bottom_color;
+        
+    // Clip glyph against left edge of scissor rect
+    if(r.x0 < s.x0)
+    {
+        float f = (float)(s.x0 - r.x0) / r.width();
+        r.x0 = s.x0;
+        s0 = lerp(s0, s1, f);
+    }
+
+    // Clip glyph against top edge of scissor rect
+    if(r.y0 < s.y0)
+    {
+        float f = (float)(s.y0 - r.y0) / r.height();
+        r.y0 = s.y0;
+        t0 = lerp(t0, t1, f);
+        c0 = lerp(c0, c1, f);            
+    }
+
+    // Clip glyph against right edge of scissor rect
+    if(r.x1 > s.x1)
+    {
+        float f = (float)(r.x1 - s.x1) / r.width();
+        r.x1 = s.x1;
+        s1 = lerp(s1, s0, f);
+    }
+
+    // Clip glyph against bottom edge of scissor rect
+    if(r.y1 > s.y1)
+    {
+        float f = (float)(r.y1 - s.y1) / r.height();
+        r.y1 = s.y1;
+        t1 = lerp(t1, t0, f);
+        c1 = lerp(c1, c0, f);            
+    }
+
+    // Add clipped glyph
+    vertices.push_back({short2(r.x0, r.y0), byte4(c0 * 255.0f), {s0, t0}});
+    vertices.push_back({short2(r.x1, r.y0), byte4(c0 * 255.0f), {s1, t0}});
+    vertices.push_back({short2(r.x1, r.y1), byte4(c1 * 255.0f), {s1, t1}});
+    vertices.push_back({short2(r.x0, r.y1), byte4(c1 * 255.0f), {s0, t1}});
 }
 
 void draw_rect(gui & g, const rect & r, const float4 & color) { draw_rect(g, r, color, color); }
