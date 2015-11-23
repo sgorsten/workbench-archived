@@ -474,13 +474,13 @@ void position_gizmo(gui & g, int id, float3 & position)
         g.gizmode = gizmo_mode::none;
         auto ray = g.get_ray_from_cursor();
         ray.origin -= position;
-        float t;           
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[0], &t)) g.gizmode = gizmo_mode::translate_x;
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[1], &t)) g.gizmode = gizmo_mode::translate_y;
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[2], &t)) g.gizmode = gizmo_mode::translate_z;
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[3], &t)) g.gizmode = gizmo_mode::translate_yz;
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[4], &t)) g.gizmode = gizmo_mode::translate_zx;
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[5], &t)) g.gizmode = gizmo_mode::translate_xy;
+        float best_t = std::numeric_limits<float>::infinity(), t;           
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[0], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_x; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[1], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_y; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[2], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_z; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[3], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_yz; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[4], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_zx; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_meshes[5], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_xy; best_t = t; }
         if(g.gizmode != gizmo_mode::none)
         {
             g.click_offset = ray.origin + ray.direction*t;
