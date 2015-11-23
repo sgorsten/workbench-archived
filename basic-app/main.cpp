@@ -115,6 +115,12 @@ void object_properties_ui(gui & g, int id, const rect & r, std::set<scene_object
     int line_height = g.default_font.line_height + 4;
     edit(g, 1, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.name);
     y0 += line_height + 2;
+    edit(g, 2, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.position.x);
+    y0 += line_height + 2;
+    edit(g, 3, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.position.y);
+    y0 += line_height + 2;
+    edit(g, 4, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.position.z);
+    y0 += line_height + 2;
 
     g.end_scissor();
     g.end_children();

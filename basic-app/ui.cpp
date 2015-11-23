@@ -239,7 +239,7 @@ void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
     }
 }
 
-void edit(gui & g, int id, const rect & r, std::string & text)
+bool edit(gui & g, int id, const rect & r, std::string & text)
 {
     if(g.check_click(id, r))
     {
@@ -249,6 +249,7 @@ void edit(gui & g, int id, const rect & r, std::string & text)
     g.check_release(id);
     if(g.is_pressed(id)) g.text_cursor = g.default_font.get_cursor_pos(text, g.cursor.x - r.x0 - 5);
 
+    bool changed = false;
     if(g.is_focused(id))
     {
         g.text_cursor = std::min(g.text_cursor, text.size());
@@ -267,7 +268,9 @@ void edit(gui & g, int id, const rect & r, std::string & text)
             assert(isprint(g.codepoint)); // Only support printable ASCII for now, later, we will encode other characters in utf-8
             text.insert(begin(text) + g.text_cursor++, (char)g.codepoint);
             g.text_mark = g.text_cursor;
+            changed = true;
         }
+
         if(g.pressed_key != key::none)
         {
             switch(g.pressed_key)
@@ -295,11 +298,13 @@ void edit(gui & g, int id, const rect & r, std::string & text)
                     auto hi = std::max(g.text_cursor, g.text_mark);
                     text.erase(begin(text)+lo, begin(text)+hi);
                     g.text_cursor = g.text_mark = lo;
+                    changed = true;
                 }
                 else if(g.text_cursor > 0)
                 {
                     text.erase(begin(text) + --g.text_cursor); 
                     g.text_mark = g.text_cursor;
+                    changed = true;
                 }
                 break;
             case key::delete_: 
@@ -308,9 +313,15 @@ void edit(gui & g, int id, const rect & r, std::string & text)
                     auto lo = std::min(g.text_cursor, g.text_mark);
                     auto hi = std::max(g.text_cursor, g.text_mark);
                     text.erase(begin(text)+lo, begin(text)+hi);
-                    g.text_cursor = g.text_mark = lo;                    
+                    g.text_cursor = g.text_mark = lo;   
+                    changed = true;
                 }
-                if(g.text_cursor < text.size()) text.erase(begin(text) + g.text_cursor); break;
+                if(g.text_cursor < text.size())
+                {
+                    text.erase(begin(text) + g.text_cursor);
+                    changed = true;
+                }
+                break;
             }
         }
     }
@@ -328,6 +339,20 @@ void edit(gui & g, int id, const rect & r, std::string & text)
         int w = g.default_font.get_text_width(text.substr(0, g.text_cursor));
         draw_rect(g, {tr.x0+w, tr.y0, tr.x0+w+1, tr.y1}, {0,0,0,1});
     }
+    return changed;
+}
+
+#include <sstream>
+
+bool edit(gui & g, int id, const rect & r, float & number)
+{
+    std::ostringstream ss;
+    ss << number;
+    std::string text = ss.str();
+    if(!edit(g, id, r, text)) return false;
+
+    std::istringstream(text) >> number;
+    return true;
 }
 
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset)

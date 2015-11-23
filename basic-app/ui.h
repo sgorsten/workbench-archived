@@ -106,7 +106,9 @@ void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color
 void draw_text(gui & g, int2 p, const float4 & c, const std::string & text);
 
 // 2D gui widgets
-void edit(gui & g, int id, const rect & r, std::string & text);
+bool edit(gui & g, int id, const rect & r, std::string & text);
+bool edit(gui & g, int id, const rect & r, float & number);
+
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset);
 std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split);
 
