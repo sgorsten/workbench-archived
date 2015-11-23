@@ -3,6 +3,7 @@
 
 #include "ui.h"
 
+#include <cassert>
 #include <cstdlib>
 #include <set>
 #include <sstream>
@@ -75,15 +76,14 @@ float3 get_center_of_mass(const std::set<scene_object *> & objects)
 
 void object_list_ui(gui & g, int id, const rect & r, std::vector<scene_object> & objects, std::set<scene_object *> & selection, int & offset)
 {
-    draw_rect(g, r, {0.3f,0.3f,0.3f,1});
     auto panel = vscroll_panel(g, id, r, objects.size()*30+20, offset);
     g.begin_childen(id);
     g.begin_scissor(panel);
     int y0 = panel.y0 + 10 - offset;
     for(auto & obj : objects)
     {
-        rect list_entry = {panel.x0 + 10, y0, panel.x1 - 10, y0 + 30};
-        if(g.ml_down && list_entry.contains(int2(g.cursor)))
+        const rect list_entry = {panel.x0 + 10, y0, panel.x1 - 10, y0 + 30};
+        if(g.check_click(&obj - objects.data(), list_entry))
         {
             if(!g.ctrl) selection.clear();
             auto it = selection.find(&obj);
@@ -97,6 +97,24 @@ void object_list_ui(gui & g, int id, const rect & r, std::vector<scene_object> &
         draw_text(g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj.name);
         y0 += 30;
     }
+    g.end_scissor();
+    g.end_children();
+}
+
+void object_properties_ui(gui & g, int id, const rect & r, std::set<scene_object *> & selection, int & offset)
+{
+    if(selection.size() != 1) return;
+
+    auto & obj = **selection.begin();
+
+    auto panel = vscroll_panel(g, id, r, 1000, offset); // TODO: Determine correct size
+    g.begin_childen(id);
+    g.begin_scissor(panel);
+    int y0 = panel.y0 + 10 - offset;
+
+    draw_text(g, {r.x0 + 10, y0}, {1,1,1,1}, obj.name);
+    y0 += 30;
+
     g.end_scissor();
     g.end_children();
 }
@@ -135,6 +153,28 @@ void viewport_ui(gui & g, int id, const rect & r, std::vector<scene_object> & ob
         if(g.mr) do_mouselook(g, 0.01f);
         move_wasd(g, 8.0f);
     }
+}
+
+void begin_3d(GLFWwindow * win, const rect & r, gui & g)
+{
+    int fw, fh, w, h;
+    glfwGetFramebufferSize(win, &fw, &fh);
+    glfwGetWindowSize(win, &w, &h);
+    const int multiplier = fw / w;
+    assert(w * multiplier == fw);
+    assert(h * multiplier == fh);
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glViewport(r.x0 * multiplier, r.y0 * multiplier, r.width() * multiplier, r.height() * multiplier);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(r.x0 * multiplier, r.y0 * multiplier, r.width() * multiplier, r.height() * multiplier);
+
+    g.viewport3d = r;
+}
+
+void end_3d()
+{
+    glPopAttrib();
 }
 
 int main(int argc, char * argv[])
@@ -221,8 +261,10 @@ int main(int argc, char * argv[])
         g.ml_down = g.ml_up = false;
         glfwPollEvents();
 
-        int w,h;
+        int fw, fh, w, h;
+        glfwGetFramebufferSize(win, &fw, &fh);
         glfwGetWindowSize(win, &w, &h);
+
         g.begin_frame({w, h});
 
         const double t1 = glfwGetTime();
@@ -232,20 +274,23 @@ int main(int argc, char * argv[])
         viewport_ui(g, 1, {0, 0, w-200, h}, objects, selection);
         auto s = vsplitter(g, 2, {w-200, 0, w, h}, split);
         object_list_ui(g, 3, s.first, objects, selection, offset0);
-        object_list_ui(g, 4, s.second, objects, selection, offset1);
+        object_properties_ui(g, 4, s.second, selection, offset1);
         g.end_frame();
 
-        glfwGetFramebufferSize(win, &w, &h);
-        glViewport(0, 0, w, h);
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        glViewport(0, 0, fw, fh);
+        glClearColor(0.2f, 0.2f, 0.2f, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        begin_3d(win, {0, 0, w-200, h}, g);
+        glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glPushAttrib(GL_ALL_ATTRIB_BITS);
-
         glMatrixMode(GL_PROJECTION);
-        gl_load_matrix(perspective_matrix(1.0f, (float)w/h, 0.1f, 16.0f));
+        gl_load_matrix(g.get_projection_matrix());
 
         glMatrixMode(GL_MODELVIEW);
-        gl_load_matrix(g.cam.get_view_matrix());
+        gl_load_matrix(g.get_view_matrix());
         glEnable(GL_DEPTH_TEST);
         glBegin(GL_LINES);
         for(int i=-5; i<=5; ++i)
@@ -278,9 +323,8 @@ int main(int argc, char * argv[])
             render_gizmo(g);
         }
 
-        glPopAttrib();
+        end_3d();
 
-        glPushAttrib(GL_ALL_ATTRIB_BITS);
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         glOrtho(0, w, h, 0, -1, +1);

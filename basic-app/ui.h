@@ -28,6 +28,7 @@ struct rect
     int x0, y0, x1, y1; 
     int width() const { return x1 - x0; }
     int height() const { return y1 - y0; }
+    int2 dims() const { return {width(), height()}; }
     bool contains(const int2 & r) const { return r.x >= x0 && r.y >= y0 && r.x < x1 && r.y < y1; }
 };
 
@@ -54,6 +55,7 @@ struct gui
     std::vector<int> current_id;
     std::vector<int> pressed_id;
 
+    rect viewport3d;                // Current 3D viewport used to render the scene
     camera cam;                     // Current 3D camera used to render the scene
     gizmo_mode gizmode;             // Mode that the gizmo is currently in
     float3 original_position;       // Original position of an object being manipulated with a gizmo
@@ -69,6 +71,8 @@ struct gui
     void begin_childen(int id);
     void end_children();
 
+    bool check_click(int id, const rect & r);
+
     // API for rendering 2D glyphs
     void begin_frame(const int2 & window_size);
     void end_frame();
@@ -79,8 +83,10 @@ struct gui
     void add_glyph(const rect & r, float s0, float t0, float s1, float t1, const float4 & top_color, const float4 & bottom_color);
 
     // API for doing computations in 3D space
-    float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix((float)window_size.x/window_size.y); }
-    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor, window_size); }
+    float4x4 get_view_matrix() const { return cam.get_view_matrix(); }
+    float4x4 get_projection_matrix() const { return cam.get_projection_matrix((float)viewport3d.width()/viewport3d.height()); }
+    float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix((float)viewport3d.width()/viewport3d.height()); }
+    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor-float2(viewport3d.x0, viewport3d.y0), viewport3d.dims()); }
 };
 
 // Basic 2D gui output
