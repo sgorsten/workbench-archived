@@ -261,6 +261,7 @@ int main(int argc, char * argv[])
                 : ((i+j) % 2 ? 0.2f : 0.1f);
         }
     }
+
     GLuint tex = 0;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -268,13 +269,14 @@ int main(int argc, char * argv[])
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-    glGenTextures(1, &g.font_tex);
-    glBindTexture(GL_TEXTURE_2D, g.font_tex);
+    GLuint font_tex = 0;
+    glGenTextures(1, &font_tex);
+    glBindTexture(GL_TEXTURE_2D, font_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, g.default_font.tex_size.x, g.default_font.tex_size.y, 0, GL_ALPHA, GL_UNSIGNED_BYTE, g.default_font.tex_pixels.data());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-    int split = 358, offset0 = 0, offset1 = 0;
+    int split1 = 1080, split2 = 358, offset0 = 0, offset1 = 0;
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
@@ -288,16 +290,17 @@ int main(int argc, char * argv[])
         glfwGetFramebufferSize(win, &fw, &fh);
         glfwGetWindowSize(win, &w, &h);
 
-        g.begin_frame({w, h});
-
         const double t1 = glfwGetTime();
         g.timestep = static_cast<float>(t1-t0);
         t0 = t1;
 
-        viewport_ui(g, 1, {0, 0, w-200, h}, objects, selection);
-        auto s = vsplitter(g, 2, {w-200, 0, w, h}, split);
-        object_list_ui(g, 3, s.first, objects, selection, offset0);
-        object_properties_ui(g, 4, s.second, selection, offset1);
+        g.begin_frame({w, h});
+        auto s = hsplitter(g, 1, {0, 0, w, h}, split1);
+        auto view3d = s.first;
+        viewport_ui(g, 2, view3d, objects, selection);
+        s = vsplitter(g, 3, s.second, split2);
+        object_list_ui(g, 4, s.first, objects, selection, offset0);
+        object_properties_ui(g, 5, s.second, selection, offset1);
         g.end_frame();
 
         glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -305,7 +308,7 @@ int main(int argc, char * argv[])
         glClearColor(0.2f, 0.2f, 0.2f, 1);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        begin_3d(win, {0, 0, w-200, h}, g);
+        begin_3d(win, view3d, g);
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -359,7 +362,7 @@ int main(int argc, char * argv[])
 
         glDisable(GL_LIGHTING);
         glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, g.font_tex);
+        glBindTexture(GL_TEXTURE_2D, font_tex);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         

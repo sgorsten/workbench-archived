@@ -93,6 +93,16 @@ bool gui::check_click(int id, const rect & r)
     return false;
 }
 
+bool gui::check_pressed(int id)
+{
+    if(is_pressed(id))
+    {
+        if(ml_up) clear_pressed();
+        else return true;
+    }
+    return false;
+}
+
 bool gui::check_release(int id)
 {
     if(ml_up && is_pressed(id))
@@ -371,46 +381,48 @@ bool edit(gui & g, int id, const rect & r, float2 & vec) { return edit_vector(g,
 bool edit(gui & g, int id, const rect & r, float3 & vec) { return edit_vector(g, id, r, vec); }
 bool edit(gui & g, int id, const rect & r, float4 & vec) { return edit_vector(g, id, r, vec); }
 
+const int scrollbar_width = 12;
+const int splitbar_width = 6;
+
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset)
 {
-    const int scrollbar_width = 12;
-
-    if(g.is_pressed(id))
-    {
-        if(g.ml_up) g.clear_pressed();
-        else offset = (static_cast<int>(g.cursor.y - g.click_offset.y) - r.y0) * client_height / r.height();
-    }    
-
+    if(g.check_pressed(id)) offset = (static_cast<int>(g.cursor.y - g.click_offset.y) - r.y0) * client_height / r.height();
     if(g.is_cursor_over(r)) offset -= static_cast<int>(g.scroll.y * 20);
     offset = std::min(offset, client_height - r.height());
     offset = std::max(offset, 0);
+
     if(client_height <= r.height()) return r;
-
-    draw_rect(g, {r.x1-scrollbar_width, r.y0, r.x1, r.y1}, {0.5f,0.5f,0.5f,1}); // Track
-
     const rect tab = {r.x1-scrollbar_width, r.y0 + offset * r.height() / client_height, r.x1, r.y0 + (offset + r.height()) * r.height() / client_height};
     g.check_click(id, tab);
+
+    draw_rect(g, {r.x1-scrollbar_width, r.y0, r.x1, r.y1}, {0.5f,0.5f,0.5f,1}); // Track
     draw_rounded_rect(g, tab, (scrollbar_width-2)/2, {0.8f,0.8f,0.8f,1}); // Tab
     return {r.x0, r.y0, r.x1-scrollbar_width, r.y1};
 }
 
-const int splitbar_width = 6;
+std::pair<rect, rect> hsplitter(gui & g, int id, const rect & r, int & split)
+{
+    if(g.check_pressed(id)) split = static_cast<int>(g.cursor.x - g.click_offset.x) - r.x0;
+    split = std::min(split, r.x1 - 10 - splitbar_width);
+    split = std::max(split, r.x0 + 10);
+
+    const rect splitbar = {r.x0 + split, r.y0, r.x0 + split + splitbar_width, r.y1};
+    g.check_click(id, splitbar);
+
+    draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
+    return {{r.x0, r.y0, splitbar.x0, r.y1}, {splitbar.x1, r.y0, r.x1, r.y1}};
+}
 
 std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split)
 {
-    if(g.is_pressed(id))
-    {
-        if(g.ml_up) g.clear_pressed();
-        else split = static_cast<int>(g.cursor.y - g.click_offset.y) - r.y0;
-    }
-
+    if(g.check_pressed(id)) split = static_cast<int>(g.cursor.y - g.click_offset.y) - r.y0;
     split = std::min(split, r.y1 - 10 - splitbar_width);
     split = std::max(split, r.y0 + 10);
 
     const rect splitbar = {r.x0, r.y0 + split, r.x1, r.y0 + split + splitbar_width};
     g.check_click(id, splitbar);
-    draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
 
+    draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
     return {{r.x0, r.y0, r.x1, splitbar.y0}, {r.x0, splitbar.y1, r.x1, r.y1}};
 }
 

@@ -7,8 +7,6 @@
 #include "geometry.h"
 #include "font.h"
 
-#include <glfw/glfw3.h>
-
 enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
 
 struct camera
@@ -42,7 +40,6 @@ struct gui
     std::vector<rect> scissor;
 
     font default_font;
-    GLuint font_tex;
     geometry_mesh gizmo_meshes[6];
 
     int2 window_size;               // Size in pixels of the current window
@@ -80,6 +77,7 @@ struct gui
 
     bool is_cursor_over(const rect & r) const;
     bool check_click(int id, const rect & r);
+    bool check_pressed(int id); // Returns true if the item with the specified ID was clicked and has not yet been released
     bool check_release(int id);
 
     // API for rendering 2D glyphs
@@ -114,7 +112,9 @@ bool edit(gui & g, int id, const rect & r, float4 & vec);
 bool edit_vector(gui & g, int id, const rect & r, float data[], int size);
 template<int N> bool edit(gui & g, int id, const rect & r, linalg::vec<float,N> & vec) { return edit_vector(g, id, r, begin(vec), N); }
 
+// These layout controls return rects defining their client regions
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset);
+std::pair<rect, rect> hsplitter(gui & g, int id, const rect & r, int & split);
 std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split);
 
 // 3D camera interactions
