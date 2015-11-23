@@ -99,6 +99,8 @@ struct gui
 // Basic 2D gui output
 void draw_rect(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color);
 void draw_rect(gui & g, const rect & r, const float4 & color);
+void draw_rounded_rect_top(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color);
+void draw_rounded_rect_bottom(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color);
 void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & top_color, const float4 & bottom_color);
 void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color);
 void draw_text(gui & g, int2 p, const float4 & c, const std::string & text);

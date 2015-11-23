@@ -214,27 +214,37 @@ void draw_rect(gui & g, const rect & r, const float4 & top_color, const float4 &
     g.add_glyph(r, s, t, s, t, top_color, bottom_color);
 }
 
+void draw_rounded_rect_top(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
+{
+    const int radius = r.height();
+    draw_rect(g, {r.x0+radius, r.y0, r.x1-radius, r.y0+radius}, top_color, bottom_color);
+    if(auto * glyph = g.default_font.get_glyph(-radius))
+    {
+        g.add_glyph({r.x0, r.y0, r.x0+radius, r.y0+radius}, glyph->s1, glyph->t1, glyph->s0, glyph->t0, top_color, bottom_color);
+        g.add_glyph({r.x1-radius, r.y0, r.x1, r.y0+radius}, glyph->s0, glyph->t1, glyph->s1, glyph->t0, top_color, bottom_color);
+    }
+}
+
+void draw_rounded_rect_bottom(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
+{
+    const int radius = r.height();
+    draw_rect(g, {r.x0+radius, r.y1-radius, r.x1-radius, r.y1}, top_color, bottom_color);
+    if(auto * glyph = g.default_font.get_glyph(-radius))
+    {
+        g.add_glyph({r.x0, r.y1-radius, r.x0+radius, r.y1}, glyph->s1, glyph->t0, glyph->s0, glyph->t1, top_color, bottom_color);
+        g.add_glyph({r.x1-radius, r.y1-radius, r.x1, r.y1}, glyph->s0, glyph->t0, glyph->s1, glyph->t1, top_color, bottom_color);
+    }
+}
+
 void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color) { draw_rounded_rect(g, r, radius, color, color); }
 void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & top_color, const float4 & bottom_color)
 {
     assert(radius >= 0);
-
-    auto c0 = top_color;
-    auto c1 = lerp(top_color, bottom_color, (float)radius/r.height());
-    auto c2 = lerp(bottom_color, top_color, (float)radius/r.height());
-    auto c3 = bottom_color;
-
-    draw_rect(g, {r.x0+radius, r.y0, r.x1-radius, r.y0+radius}, c0, c1);
+    const float4 c1 = lerp(top_color, bottom_color, (float)radius/r.height());
+    const float4 c2 = lerp(bottom_color, top_color, (float)radius/r.height());
+    draw_rounded_rect_top(g, {r.x0, r.y0, r.x1, r.y0+radius}, top_color, c1);
     draw_rect(g, {r.x0, r.y0+radius, r.x1, r.y1-radius}, c1, c2);        
-    draw_rect(g, {r.x0+radius, r.y1-radius, r.x1-radius, r.y1}, c2, c3);
-
-    if(auto * glyph = g.default_font.get_glyph(-radius))
-    {
-        g.add_glyph({r.x0, r.y0, r.x0+radius, r.y0+radius}, glyph->s1, glyph->t1, glyph->s0, glyph->t0, c0, c1);
-        g.add_glyph({r.x1-radius, r.y0, r.x1, r.y0+radius}, glyph->s0, glyph->t1, glyph->s1, glyph->t0, c0, c1);
-        g.add_glyph({r.x0, r.y1-radius, r.x0+radius, r.y1}, glyph->s1, glyph->t0, glyph->s0, glyph->t1, c2, c3);
-        g.add_glyph({r.x1-radius, r.y1-radius, r.x1, r.y1}, glyph->s0, glyph->t0, glyph->s1, glyph->t1, c2, c3);
-    }
+    draw_rounded_rect_bottom(g, {r.x0, r.y1-radius, r.x1, r.y1}, c2, bottom_color);
 }
 
 void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
@@ -409,7 +419,7 @@ std::pair<rect, rect> hsplitter(gui & g, int id, const rect & r, int & split)
     const rect splitbar = {r.x0 + split, r.y0, r.x0 + split + splitbar_width, r.y1};
     g.check_click(id, splitbar);
 
-    draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
+    //draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
     return {{r.x0, r.y0, splitbar.x0, r.y1}, {splitbar.x1, r.y0, r.x1, r.y1}};
 }
 
@@ -422,7 +432,7 @@ std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split)
     const rect splitbar = {r.x0, r.y0 + split, r.x1, r.y0 + split + splitbar_width};
     g.check_click(id, splitbar);
 
-    draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
+    //draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
     return {{r.x0, r.y0, r.x1, splitbar.y0}, {r.x0, splitbar.y1, r.x1, r.y1}};
 }
 

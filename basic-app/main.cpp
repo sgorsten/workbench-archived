@@ -74,8 +74,31 @@ float3 get_center_of_mass(const std::set<scene_object *> & objects)
     return sum / (float)objects.size();
 }
 
-void object_list_ui(gui & g, int id, const rect & r, std::vector<scene_object> & objects, std::set<scene_object *> & selection, int & offset)
+rect tabbed_frame(gui & g, rect r, const std::string & caption)
 {
+    const float4 frame_color = {0.5f,0.5f,0.5f,1}, cap_color = {0.3f,0.3f,0.3f,1};
+    const int cap_width = g.default_font.get_text_width(caption)+24, cap_height = g.default_font.line_height + 4;
+
+    draw_rounded_rect_top(g, {r.x0, r.y0, r.x0 + cap_width, r.y0 + 10}, frame_color, frame_color);
+    draw_rect(g, {r.x0, r.y0 + 10, r.x0 + cap_width, r.y0 + cap_height}, frame_color);
+    draw_rect(g, {r.x0, r.y0 + cap_height, r.x1, r.y0 + cap_height + 1}, frame_color);
+    draw_rect(g, {r.x0, r.y0 + cap_height + 1, r.x0 + 1, r.y1 - 1}, frame_color);
+    draw_rect(g, {r.x1 - 1, r.y0 + cap_height + 1, r.x1, r.y1 - 1}, frame_color);
+    draw_rect(g, {r.x0, r.y1 - 1, r.x1, r.y1}, frame_color);
+
+    draw_rounded_rect_top(g, {r.x0 + 1, r.y0 + 1, r.x0 + cap_width - 1, r.y0 + 10}, cap_color, cap_color);
+    draw_rect(g, {r.x0 + 1, r.y0 + 10, r.x0 + cap_width - 1, r.y0 + cap_height + 1}, cap_color);
+
+    draw_text(g, {r.x0 + 12, r.y0 + 4}, {0,0,0,1}, caption);
+    draw_text(g, {r.x0 + 11, r.y0 + 3}, {1,1,1,1}, caption);
+
+    return {r.x0, r.y0 + cap_height, r.x1, r.y1};
+}
+
+void object_list_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, std::set<scene_object *> & selection, int & offset)
+{
+    r = tabbed_frame(g, r, "Object List");
+
     auto panel = vscroll_panel(g, id, r, objects.size()*30+20, offset);
     g.begin_childen(id);
     g.begin_scissor(panel);
@@ -101,8 +124,10 @@ void object_list_ui(gui & g, int id, const rect & r, std::vector<scene_object> &
     g.end_children();
 }
 
-void object_properties_ui(gui & g, int id, const rect & r, std::set<scene_object *> & selection, int & offset)
+void object_properties_ui(gui & g, int id, rect r, std::set<scene_object *> & selection, int & offset)
 {
+    r = tabbed_frame(g, r, "Object Properties");
+
     if(selection.size() != 1) return;
 
     auto & obj = **selection.begin();
@@ -124,8 +149,10 @@ void object_properties_ui(gui & g, int id, const rect & r, std::set<scene_object
     g.end_children();
 }
 
-void viewport_ui(gui & g, int id, const rect & r, std::vector<scene_object> & objects, std::set<scene_object *> & selection)
+rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, std::set<scene_object *> & selection)
 {
+    r = tabbed_frame(g, r, "Scene View");
+
     if(!selection.empty())
     {
         g.begin_childen(id);
@@ -134,7 +161,7 @@ void viewport_ui(gui & g, int id, const rect & r, std::vector<scene_object> & ob
         if(new_com != com) for(auto obj : selection) obj->position += new_com - com;
         g.end_children();
     }
-    if(g.is_child_pressed(id)) return;
+    if(g.is_child_pressed(id)) return r;
 
     if(g.check_click(id, r))
     {
@@ -157,6 +184,7 @@ void viewport_ui(gui & g, int id, const rect & r, std::vector<scene_object> & ob
         if(g.mr) do_mouselook(g, 0.01f);
         move_wasd(g, 8.0f);
     }
+    return r;
 }
 
 void begin_3d(GLFWwindow * win, const rect & r, gui & g)
@@ -169,9 +197,9 @@ void begin_3d(GLFWwindow * win, const rect & r, gui & g)
     assert(h * multiplier == fh);
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glViewport(r.x0 * multiplier, r.y0 * multiplier, r.width() * multiplier, r.height() * multiplier);
+    glViewport(r.x0 * multiplier, fh - r.y1 * multiplier, r.width() * multiplier, r.height() * multiplier);
     glEnable(GL_SCISSOR_TEST);
-    glScissor(r.x0 * multiplier, r.y0 * multiplier, r.width() * multiplier, r.height() * multiplier);
+    glScissor(r.x0 * multiplier, fh - r.y1 * multiplier, r.width() * multiplier, r.height() * multiplier);
 
     g.viewport3d = r;
 }
@@ -296,8 +324,7 @@ int main(int argc, char * argv[])
 
         g.begin_frame({w, h});
         auto s = hsplitter(g, 1, {0, 0, w, h}, split1);
-        auto view3d = s.first;
-        viewport_ui(g, 2, view3d, objects, selection);
+        auto view3d = viewport_ui(g, 2, s.first, objects, selection);
         s = vsplitter(g, 3, s.second, split2);
         object_list_ui(g, 4, s.first, objects, selection, offset0);
         object_properties_ui(g, 5, s.second, selection, offset1);
@@ -305,7 +332,7 @@ int main(int argc, char * argv[])
 
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         glViewport(0, 0, fw, fh);
-        glClearColor(0.2f, 0.2f, 0.2f, 1);
+        glClearColor(0.1f, 0.1f, 0.1f, 1);
         glClear(GL_COLOR_BUFFER_BIT);
 
         begin_3d(win, view3d, g);
