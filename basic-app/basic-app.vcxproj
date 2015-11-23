@@ -149,6 +149,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="font.cpp" />
     <ClCompile Include="geometry.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ui.cpp" />
@@ -157,6 +158,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="font.h" />
     <ClInclude Include="geometry.h" />
     <ClInclude Include="linalg.h" />
     <ClInclude Include="ui.h" />

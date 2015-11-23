@@ -141,6 +141,13 @@ int main(int argc, char * argv[])
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
+    glGenTextures(1, &g.font_tex);
+    glBindTexture(GL_TEXTURE_2D, g.font_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, g.default_font.tex_size.x, g.default_font.tex_size.y, 0, GL_ALPHA, GL_UNSIGNED_BYTE, g.default_font.tex_pixels.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
@@ -178,6 +185,11 @@ int main(int argc, char * argv[])
             }
         }
 
+        g.begin_frame();
+        draw_rounded_rect(g, {20,20,200,50}, 4, {0.5f,0.5f,0.5f,1});
+        draw_text(g, {32,32}, {1,1,1,1}, "Hello world!");
+        g.end_frame();
+
         int w,h;
         glfwGetFramebufferSize(win, &w, &h);
         glViewport(0, 0, w, h);
@@ -202,6 +214,7 @@ int main(int argc, char * argv[])
         glEnd();
 
         glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, tex);
         glEnable(GL_LIGHTING);
         glEnable(GL_LIGHT0);
         glLightfv(GL_LIGHT0, GL_POSITION, begin(normalize(float4(0.1f, 0.9f, 0.3f, 0))));
@@ -222,6 +235,37 @@ int main(int argc, char * argv[])
         }
 
         glPopAttrib();
+
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0, w, h, 0, -1, +1);
+
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        glDisable(GL_DEPTH_TEST);
+
+        glDisable(GL_LIGHTING);
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, g.font_tex);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        
+        const auto * vertex = g.vertices.data();
+        glVertexPointer(2, GL_SHORT, sizeof(*vertex), &vertex->position);
+        glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(*vertex), &vertex->color);
+        glTexCoordPointer(2, GL_FLOAT, sizeof(*vertex), &vertex->texcoord);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glEnableClientState(GL_COLOR_ARRAY);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        for(const auto & list : g.lists) glDrawArrays(GL_QUADS, list.first, list.last - list.first);
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_COLOR_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+
+        glPopAttrib();
+
         glfwSwapBuffers(win);
     }
     glfwTerminate();

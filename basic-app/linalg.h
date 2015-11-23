@@ -5,40 +5,44 @@
 #define LINALG_H
 
 #include <cmath>
+#include <cstdint>
 
 namespace linalg
 {
     template<class T, int M> struct vec;
     template<class T> struct vec<T,2>
     {
-        T                   x,y;
-                            vec()                           : x(), y() {}
-                            vec(T x, T y)                   : x(x), y(y) {}
-        explicit            vec(T s)                        : vec(s, s) {}
-        const T &           operator[] (int i) const        { return (&x)[i]; }
-        T &                 operator[] (int i)              { return (&x)[i]; }
+        T                           x,y;
+                                    vec()                       : x(), y() {}
+                                    vec(T x, T y)               : x(x), y(y) {}
+        explicit                    vec(T s)                    : vec(s, s) {}
+        template<class U> explicit  vec(vec<U,2> & v)           : vec(static_cast<T>(v.x), static_cast<T>(v.y)) {}
+        const T &                   operator[] (int i) const    { return (&x)[i]; }
+        T &                         operator[] (int i)          { return (&x)[i]; }
     };
     template<class T> struct vec<T,3>
     {
-        T                   x,y,z;
-                            vec()                           : x(), y(), z() {}
-                            vec(T x, T y, T z)              : x(x), y(y), z(z) {}
-                            vec(vec<T,2> xy, T z)           : vec(xy.x, xy.y, z) {}
-        explicit            vec(T s)                        : vec(s, s, s) {}
-        const vec<T,2> &    xy() const                      { return reinterpret_cast<const vec<T,2> &>(x); }
-        const T &           operator[] (int i) const        { return (&x)[i]; }
-        T &                 operator[] (int i)              { return (&x)[i]; }
+        T                           x,y,z;
+                                    vec()                       : x(), y(), z() {}
+                                    vec(T x, T y, T z)          : x(x), y(y), z(z) {}
+                                    vec(vec<T,2> xy, T z)       : vec(xy.x, xy.y, z) {}
+        explicit                    vec(T s)                    : vec(s, s, s) {}
+        template<class U> explicit  vec(vec<U,3> & v)           : vec(static_cast<T>(v.x), static_cast<T>(v.y), static_cast<T>(v.z)) {}
+        const vec<T,2> &            xy() const                  { return reinterpret_cast<const vec<T,2> &>(x); }
+        const T &                   operator[] (int i) const    { return (&x)[i]; }
+        T &                         operator[] (int i)          { return (&x)[i]; }
     };
     template<class T> struct vec<T,4>
     {
-        T                   x,y,z,w;
-                            vec()                           : x(), y(), z(), w() {}
-                            vec(T x, T y, T z, T w)         : x(x), y(y), z(z), w(w) {}
-                            vec(vec<T,3> xyz, T w)          : vec(xyz.x, xyz.y, xyz.z, w) {}
-        explicit            vec(T s)                        : vec(s, s, s, s) {}
-        const vec<T,3> &    xyz() const                     { return reinterpret_cast<const vec<T,3> &>(x); }
-        const T &           operator[] (int i) const        { return (&x)[i]; }
-        T &                 operator[] (int i)              { return (&x)[i]; }
+        T                           x,y,z,w;
+                                    vec()                       : x(), y(), z(), w() {}
+                                    vec(T x, T y, T z, T w)     : x(x), y(y), z(z), w(w) {}
+                                    vec(vec<T,3> xyz, T w)      : vec(xyz.x, xyz.y, xyz.z, w) {}
+        explicit                    vec(T s)                    : vec(s, s, s, s) {}
+        template<class U> explicit  vec(vec<U,4> & v)           : vec(static_cast<T>(v.x), static_cast<T>(v.y), static_cast<T>(v.z), static_cast<T>(v.w)) {}
+        const vec<T,3> &            xyz() const                 { return reinterpret_cast<const vec<T,3> &>(x); }
+        const T &                   operator[] (int i) const    { return (&x)[i]; }
+        T &                         operator[] (int i)          { return (&x)[i]; }
     };
 
     template<class T> bool operator == (const vec<T,2> & a, const vec<T,2> & b) { return a.x==b.x && a.y==b.y; }
@@ -78,13 +82,14 @@ namespace linalg
     template<class T, int N> vec<T,N> & operator *= (vec<T,N> & a, T b) { return a *= b; }
     template<class T, int N> vec<T,N> & operator /= (vec<T,N> & a, T b) { return a /= b; }
 
-    template<class T>        vec<T,3> cross     (const vec<T,3> & a, const vec<T,3> & b) { return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x}; }
-    template<class T>        T        dot       (const vec<T,2> & a, const vec<T,2> & b) { return a.x*b.x + a.y*b.y; }
-    template<class T>        T        dot       (const vec<T,3> & a, const vec<T,3> & b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
-    template<class T>        T        dot       (const vec<T,4> & a, const vec<T,4> & b) { return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w; }
-    template<class T, int N> T        mag2      (const vec<T,N> & a)                     { return dot(a,a); }
-    template<class T, int N> T        mag       (const vec<T,N> & a)                     { return std::sqrt(mag2(a)); }
-    template<class T, int N> vec<T,N> normalize (const vec<T,N> & a)                     { return a / mag(a); }
+    template<class T>        vec<T,3> cross     (const vec<T,3> & a, const vec<T,3> & b)      { return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x}; }
+    template<class T>        T        dot       (const vec<T,2> & a, const vec<T,2> & b)      { return a.x*b.x + a.y*b.y; }
+    template<class T>        T        dot       (const vec<T,3> & a, const vec<T,3> & b)      { return a.x*b.x + a.y*b.y + a.z*b.z; }
+    template<class T>        T        dot       (const vec<T,4> & a, const vec<T,4> & b)      { return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w; }
+    template<class T, int N> vec<T,N> lerp      (const vec<T,N> & a, const vec<T,N> & b, T t) { return a*(1-t) + b*t; }
+    template<class T, int N> T        mag2      (const vec<T,N> & a)                          { return dot(a,a); }
+    template<class T, int N> T        mag       (const vec<T,N> & a)                          { return std::sqrt(mag2(a)); }
+    template<class T, int N> vec<T,N> normalize (const vec<T,N> & a)                          { return a / mag(a); }
 
     template<class T> vec<T,4> qconj (const vec<T,4> & q)                     { return {-q.x,-q.y,-q.z,q.w}; }
     template<class T> vec<T,4> qmul  (const vec<T,4> & a, const vec<T,4> & b) { return {a.x*b.w+a.w*b.x+a.y*b.z-a.z*b.y, a.y*b.w+a.w*b.y+a.z*b.x-a.x*b.z, a.z*b.w+a.w*b.z+a.x*b.y-a.y*b.x, a.w*b.w-a.x*b.x-a.y*b.y-a.z*b.z}; }
@@ -173,12 +178,15 @@ namespace linalg
 
     namespace aliases
     {
-        typedef vec<int,2> int2; typedef vec<unsigned,2> uint2; typedef vec<float,2> float2; typedef vec<double,2> double2;
-        typedef vec<int,3> int3; typedef vec<unsigned,3> uint3; typedef vec<float,3> float3; typedef vec<double,3> double3;
-        typedef vec<int,4> int4; typedef vec<unsigned,4> uint4; typedef vec<float,4> float4; typedef vec<double,4> double4;
-        typedef mat<float,2,2> float2x2; typedef mat<float,3,2> float3x2; typedef mat<float,4,2> float4x2;
-        typedef mat<float,2,3> float2x3; typedef mat<float,3,3> float3x3; typedef mat<float,4,3> float4x3;
-        typedef mat<float,2,4> float2x4; typedef mat<float,3,4> float3x4; typedef mat<float,4,4> float4x4;
+        typedef vec<uint8_t,2> byte2; typedef vec<int16_t,2> short2; typedef vec<int,2> int2; typedef vec<unsigned,2> uint2;
+        typedef vec<uint8_t,3> byte3; typedef vec<int16_t,3> short3; typedef vec<int,3> int3; typedef vec<unsigned,3> uint3;
+        typedef vec<uint8_t,4> byte4; typedef vec<int16_t,4> short4; typedef vec<int,4> int4; typedef vec<unsigned,4> uint4;
+        typedef vec<float,2> float2; typedef mat<float,2,2> float2x2; typedef mat<float,3,2> float3x2; typedef mat<float,4,2> float4x2;
+        typedef vec<float,3> float3; typedef mat<float,2,3> float2x3; typedef mat<float,3,3> float3x3; typedef mat<float,4,3> float4x3;
+        typedef vec<float,4> float4; typedef mat<float,2,4> float2x4; typedef mat<float,3,4> float3x4; typedef mat<float,4,4> float4x4;
+        typedef vec<double,2> double2; typedef mat<double,2,2> double2x2; typedef mat<double,3,2> double3x2; typedef mat<double,4,2> double4x2;
+        typedef vec<double,3> double3; typedef mat<double,2,3> double2x3; typedef mat<double,3,3> double3x3; typedef mat<double,4,3> double4x3;
+        typedef vec<double,4> double4; typedef mat<double,2,4> double2x4; typedef mat<double,3,4> double3x4; typedef mat<double,4,4> double4x4;
     }
 }
 

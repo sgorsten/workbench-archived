@@ -5,6 +5,9 @@
 #define UI_H
 
 #include "geometry.h"
+#include "font.h"
+
+#include <glfw/glfw3.h>
 
 enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
 
@@ -20,8 +23,22 @@ struct camera
     ray get_ray_from_pixel(const float2 & pixel, const int2 & viewport) const;
 };
 
+struct rect 
+{ 
+    int x0, y0, x1, y1; 
+    int width() const { return x1 - x0; }
+    int height() const { return y1 - y0; }
+};
+
 struct gui
 {
+    struct vertex { short2 position; byte4 color; float2 texcoord; };    
+    struct list { size_t level,first,last; };
+    std::vector<vertex> vertices;
+    std::vector<list> lists;
+
+    font default_font;
+    GLuint font_tex;
     geometry_mesh gizmo_meshes[6];
 
     int2 window_size;               // Size in pixels of the current window
@@ -38,9 +55,22 @@ struct gui
 
     gui();
 
+    // API for rendering 2D glyphs
+    void begin_frame();
+    void end_frame();
+    void begin_overlay();
+    void end_overlay();
+    void add_glyph(const rect & r, float s0, float t0, float s1, float t1, const float4 & top_color, const float4 & bottom_color);
+
     float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix((float)window_size.x/window_size.y); }
     ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor, window_size); }
 };
+
+void draw_rect(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color);
+void draw_rect(gui & g, const rect & r, const float4 & color);
+void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & top_color, const float4 & bottom_color);
+void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color);
+void draw_text(gui & g, int2 p, const float4 & c, const std::string & text);
 
 void do_mouselook(gui & g, float sensitivity);
 void move_wasd(gui & g, float speed);
