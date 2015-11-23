@@ -74,27 +74,6 @@ float3 get_center_of_mass(const std::set<scene_object *> & objects)
     return sum / (float)objects.size();
 }
 
-rect tabbed_frame(gui & g, rect r, const std::string & caption)
-{
-    const float4 frame_color = {0.5f,0.5f,0.5f,1}, cap_color = {0.3f,0.3f,0.3f,1};
-    const int cap_width = g.default_font.get_text_width(caption)+24, cap_height = g.default_font.line_height + 4;
-
-    draw_rounded_rect_top(g, {r.x0, r.y0, r.x0 + cap_width, r.y0 + 10}, frame_color, frame_color);
-    draw_rect(g, {r.x0, r.y0 + 10, r.x0 + cap_width, r.y0 + cap_height}, frame_color);
-    draw_rect(g, {r.x0, r.y0 + cap_height, r.x1, r.y0 + cap_height + 1}, frame_color);
-    draw_rect(g, {r.x0, r.y0 + cap_height + 1, r.x0 + 1, r.y1 - 1}, frame_color);
-    draw_rect(g, {r.x1 - 1, r.y0 + cap_height + 1, r.x1, r.y1 - 1}, frame_color);
-    draw_rect(g, {r.x0, r.y1 - 1, r.x1, r.y1}, frame_color);
-
-    draw_rounded_rect_top(g, {r.x0 + 1, r.y0 + 1, r.x0 + cap_width - 1, r.y0 + 10}, cap_color, cap_color);
-    draw_rect(g, {r.x0 + 1, r.y0 + 10, r.x0 + cap_width - 1, r.y0 + cap_height + 1}, cap_color);
-
-    draw_text(g, {r.x0 + 12, r.y0 + 4}, {0,0,0,1}, caption);
-    draw_text(g, {r.x0 + 11, r.y0 + 3}, {1,1,1,1}, caption);
-
-    return {r.x0, r.y0 + cap_height, r.x1, r.y1};
-}
-
 void object_list_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, std::set<scene_object *> & selection, int & offset)
 {
     r = tabbed_frame(g, r, "Object List");
@@ -102,10 +81,10 @@ void object_list_ui(gui & g, int id, rect r, std::vector<scene_object> & objects
     auto panel = vscroll_panel(g, id, r, objects.size()*30+20, offset);
     g.begin_childen(id);
     g.begin_scissor(panel);
-    int y0 = panel.y0 + 10 - offset;
+    int y0 = panel.y0 + 4 - offset;
     for(auto & obj : objects)
     {
-        const rect list_entry = {panel.x0 + 10, y0, panel.x1 - 10, y0 + 30};
+        const rect list_entry = {panel.x0 + 4, y0, panel.x1 - 4, y0 + g.default_font.line_height};
         if(g.check_click(&obj - objects.data(), list_entry))
         {
             if(!g.ctrl) selection.clear();
@@ -116,9 +95,8 @@ void object_list_ui(gui & g, int id, rect r, std::vector<scene_object> & objects
         }
 
         bool selected = selection.find(&obj) != end(selection);
-        draw_text(g, {list_entry.x0 + 1, list_entry.y0 + 1}, float4(0,0,0,1), obj.name);
-        draw_text(g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj.name);
-        y0 += 30;
+        draw_shadowed_text(g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj.name);
+        y0 += g.default_font.line_height + 4;
     }
     g.end_scissor();
     g.end_children();
@@ -135,15 +113,18 @@ void object_properties_ui(gui & g, int id, rect r, std::set<scene_object *> & se
     auto panel = vscroll_panel(g, id, r, 1000, offset); // TODO: Determine correct size
     g.begin_childen(id);
     g.begin_scissor(panel);
-    int y0 = panel.y0 + 10 - offset;
+    int y0 = panel.y0 + 4 - offset;
 
-    int line_height = g.default_font.line_height + 4;
-    edit(g, 1, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.name);
-    y0 += line_height + 2;
-    edit(g, 2, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.position);
-    y0 += line_height + 2;
-    edit(g, 3, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.diffuse);
-    y0 += line_height + 2;
+    const int line_height = g.default_font.line_height + 4, mid = (panel.x0 + panel.x1) / 2;
+    draw_shadowed_text(g, {panel.x0 + 4, y0 + 2}, {1,1,1,1}, "Name");
+    edit(g, 1, {mid + 2, y0, panel.x1 - 4, y0 + line_height}, obj.name);
+    y0 += line_height + 4;
+    draw_shadowed_text(g, {panel.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
+    edit(g, 2, {mid + 2, y0, panel.x1 - 4, y0 + line_height}, obj.position);
+    y0 += line_height + 4;
+    draw_shadowed_text(g, {panel.x0 + 4, y0 + 2}, {1,1,1,1}, "Diffuse");
+    edit(g, 3, {mid + 2, y0, panel.x1 - 4, y0 + line_height}, obj.diffuse);
+    y0 += line_height + 4;
 
     g.end_scissor();
     g.end_children();
@@ -234,6 +215,8 @@ int main(int argc, char * argv[])
     glfwSetKeyCallback(win, [](GLFWwindow * win, int key, int scancode, int action, int mods)
     {
         auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
+        g->ctrl = (mods & GLFW_MOD_CONTROL) != 0;
+        g->shift = (mods & GLFW_MOD_SHIFT) != 0;
         switch(key)
         {
         case GLFW_KEY_W: g->bf = action != GLFW_RELEASE; break;

@@ -8,10 +8,10 @@
 #include <algorithm>
 #include <sstream>
 
-ray camera::get_ray_from_pixel(const float2 & pixel, const int2 & viewport) const
+ray camera::get_ray_from_pixel(const float2 & pixel, const rect & viewport) const
 {
-    const float x = 2 * pixel.x / viewport.x - 1, y = 1 - 2 * pixel.y / viewport.y;
-    const float4x4 inv_view_proj = inverse(get_viewproj_matrix((float)viewport.x/viewport.y));
+    const float x = 2 * (pixel.x - viewport.x0) / viewport.width() - 1, y = 1 - 2 * (pixel.y - viewport.y0) / viewport.height();
+    const float4x4 inv_view_proj = inverse(get_viewproj_matrix(viewport));
     const float4 p0 = inv_view_proj * float4(x, y, -1, 1), p1 = inv_view_proj * float4(x, y, +1, 1);
     return {position, p1.xyz()*p0.w - p0.xyz()*p1.w};
 }
@@ -260,6 +260,12 @@ void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
     }
 }
 
+void draw_shadowed_text(gui & g, int2 p, const float4 & c, const std::string & text)
+{
+    draw_text(g, p+1, {0,0,0,c.w}, text);
+    draw_text(g, p, c, text);
+}
+
 bool edit(gui & g, int id, const rect & r, std::string & text)
 {
     if(g.check_click(id, r))
@@ -391,8 +397,28 @@ bool edit(gui & g, int id, const rect & r, float2 & vec) { return edit_vector(g,
 bool edit(gui & g, int id, const rect & r, float3 & vec) { return edit_vector(g, id, r, vec); }
 bool edit(gui & g, int id, const rect & r, float4 & vec) { return edit_vector(g, id, r, vec); }
 
+const float4 frame_color = {0.5f,0.5f,0.5f,1}, cap_color = {0.3f,0.3f,0.3f,1};
 const int scrollbar_width = 12;
 const int splitbar_width = 6;
+
+rect tabbed_frame(gui & g, rect r, const std::string & caption)
+{
+    const int cap_width = g.default_font.get_text_width(caption)+24, cap_height = g.default_font.line_height + 4;
+
+    draw_rounded_rect_top(g, {r.x0, r.y0, r.x0 + cap_width, r.y0 + 10}, frame_color, frame_color);
+    draw_rect(g, {r.x0, r.y0 + 10, r.x0 + cap_width, r.y0 + cap_height}, frame_color);
+    draw_rect(g, {r.x0, r.y0 + cap_height, r.x1, r.y0 + cap_height + 1}, frame_color);
+    draw_rect(g, {r.x0, r.y0 + cap_height + 1, r.x0 + 1, r.y1 - 1}, frame_color);
+    draw_rect(g, {r.x1 - 1, r.y0 + cap_height + 1, r.x1, r.y1 - 1}, frame_color);
+    draw_rect(g, {r.x0, r.y1 - 1, r.x1, r.y1}, frame_color);
+
+    draw_rounded_rect_top(g, {r.x0 + 1, r.y0 + 1, r.x0 + cap_width - 1, r.y0 + 10}, cap_color, cap_color);
+    draw_rect(g, {r.x0 + 1, r.y0 + 10, r.x0 + cap_width - 1, r.y0 + cap_height + 1}, cap_color);
+
+    draw_shadowed_text(g, {r.x0 + 11, r.y0 + 3}, {1,1,1,1}, caption);
+
+    return {r.x0 + 1, r.y0 + cap_height + 1, r.x1 - 1, r.y1 - 1};
+}
 
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset)
 {

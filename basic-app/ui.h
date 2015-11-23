@@ -7,7 +7,14 @@
 #include "geometry.h"
 #include "font.h"
 
-enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
+struct rect 
+{ 
+    int x0, y0, x1, y1; 
+    int width() const { return x1 - x0; }
+    int height() const { return y1 - y0; }
+    int2 dims() const { return {width(), height()}; }
+    float aspect_ratio() const { return (float)width()/height(); }
+};
 
 struct camera
 {
@@ -16,20 +23,15 @@ struct camera
     float pitch, yaw;
     float4 get_orientation() const { return qmul(rotation_quat(float3(0,1,0), yaw), rotation_quat(float3(1,0,0), pitch)); }
     float4x4 get_view_matrix() const { return rotation_matrix(qconj(get_orientation())) * translation_matrix(-position); }
-    float4x4 get_projection_matrix(float aspect) const { return perspective_matrix(yfov, aspect, near_clip, far_clip); }
-    float4x4 get_viewproj_matrix(float aspect) const { return get_projection_matrix(aspect) * get_view_matrix(); }
-    ray get_ray_from_pixel(const float2 & pixel, const int2 & viewport) const;
+    float4x4 get_projection_matrix(const rect & viewport) const { return perspective_matrix(yfov, viewport.aspect_ratio(), near_clip, far_clip); }
+    float4x4 get_viewproj_matrix(const rect & viewport) const { return get_projection_matrix(viewport) * get_view_matrix(); }
+    ray get_ray_from_pixel(const float2 & pixel, const rect & viewport) const;
 };
 
-struct rect 
-{ 
-    int x0, y0, x1, y1; 
-    int width() const { return x1 - x0; }
-    int height() const { return y1 - y0; }
-    int2 dims() const { return {width(), height()}; }
-};
+
 
 enum class key { none, left, right, up, down, home, end, page_up, page_down, backspace, delete_, enter, escape };
+enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
 
 struct gui
 {
@@ -91,9 +93,9 @@ struct gui
 
     // API for doing computations in 3D space
     float4x4 get_view_matrix() const { return cam.get_view_matrix(); }
-    float4x4 get_projection_matrix() const { return cam.get_projection_matrix((float)viewport3d.width()/viewport3d.height()); }
-    float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix((float)viewport3d.width()/viewport3d.height()); }
-    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor - float2(int2(viewport3d.x0, viewport3d.y0)), viewport3d.dims()); }
+    float4x4 get_projection_matrix() const { return cam.get_projection_matrix(viewport3d); }
+    float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix(viewport3d); }
+    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor, viewport3d); }
 };
 
 // Basic 2D gui output
@@ -104,6 +106,7 @@ void draw_rounded_rect_bottom(gui & g, const rect & r, const float4 & top_color,
 void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & top_color, const float4 & bottom_color);
 void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color);
 void draw_text(gui & g, int2 p, const float4 & c, const std::string & text);
+void draw_shadowed_text(gui & g, int2 p, const float4 & c, const std::string & text);
 
 // 2D gui widgets
 bool edit(gui & g, int id, const rect & r, std::string & text);
@@ -111,10 +114,9 @@ bool edit(gui & g, int id, const rect & r, float & number);
 bool edit(gui & g, int id, const rect & r, float2 & vec);
 bool edit(gui & g, int id, const rect & r, float3 & vec);
 bool edit(gui & g, int id, const rect & r, float4 & vec);
-bool edit_vector(gui & g, int id, const rect & r, float data[], int size);
-template<int N> bool edit(gui & g, int id, const rect & r, linalg::vec<float,N> & vec) { return edit_vector(g, id, r, begin(vec), N); }
 
 // These layout controls return rects defining their client regions
+rect tabbed_frame(gui & g, rect r, const std::string & caption);
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset);
 std::pair<rect, rect> hsplitter(gui & g, int id, const rect & r, int & split);
 std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split);
