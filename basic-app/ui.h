@@ -29,8 +29,9 @@ struct rect
     int width() const { return x1 - x0; }
     int height() const { return y1 - y0; }
     int2 dims() const { return {width(), height()}; }
-    bool contains(const int2 & r) const { return r.x >= x0 && r.y >= y0 && r.x < x1 && r.y < y1; }
 };
+
+enum class key { none, left, right, up, down, home, end, page_up, page_down, backspace, delete_, enter, escape };
 
 struct gui
 {
@@ -48,12 +49,17 @@ struct gui
     bool ctrl, shift;               // Whether at least one control or shift key is being held down
     bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
     bool ml_down, ml_up;            // Whether the left mouse was pressed or released during this frame
+    unsigned int codepoint;         // Codepoint of unicode character typed during this frame
+    key pressed_key;                // Special key pressed during this frame
     float2 cursor, delta;           // Current pixel coordinates of cursor, as well as the amount by which the cursor has moved
     float2 scroll;                  // Scroll amount in current frame
     float timestep;                 // Timestep between the last frame and this one
 
     std::vector<int> current_id;
     std::vector<int> pressed_id;
+    std::vector<int> focused_id;
+
+    std::string::size_type text_cursor, text_mark;
 
     rect viewport3d;                // Current 3D viewport used to render the scene
     camera cam;                     // Current 3D camera used to render the scene
@@ -65,13 +71,16 @@ struct gui
 
     // API for determining clicked status
     bool is_pressed(int id) const;
+    bool is_focused(int id) const;
     bool is_child_pressed(int id) const;
     void set_pressed(int id);
     void clear_pressed();
     void begin_childen(int id);
     void end_children();
 
+    bool is_cursor_over(const rect & r) const;
     bool check_click(int id, const rect & r);
+    bool check_release(int id);
 
     // API for rendering 2D glyphs
     void begin_frame(const int2 & window_size);
@@ -86,7 +95,7 @@ struct gui
     float4x4 get_view_matrix() const { return cam.get_view_matrix(); }
     float4x4 get_projection_matrix() const { return cam.get_projection_matrix((float)viewport3d.width()/viewport3d.height()); }
     float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix((float)viewport3d.width()/viewport3d.height()); }
-    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor-float2(viewport3d.x0, viewport3d.y0), viewport3d.dims()); }
+    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor - float2(int2(viewport3d.x0, viewport3d.y0)), viewport3d.dims()); }
 };
 
 // Basic 2D gui output
@@ -97,6 +106,7 @@ void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color
 void draw_text(gui & g, int2 p, const float4 & c, const std::string & text);
 
 // 2D gui widgets
+void edit(gui & g, int id, const rect & r, std::string & text);
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset);
 std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split);
 

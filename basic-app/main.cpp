@@ -112,8 +112,9 @@ void object_properties_ui(gui & g, int id, const rect & r, std::set<scene_object
     g.begin_scissor(panel);
     int y0 = panel.y0 + 10 - offset;
 
-    draw_text(g, {r.x0 + 10, y0}, {1,1,1,1}, obj.name);
-    y0 += 30;
+    int line_height = g.default_font.line_height + 4;
+    edit(g, 1, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.name);
+    y0 += line_height + 2;
 
     g.end_scissor();
     g.end_children();
@@ -130,7 +131,7 @@ void viewport_ui(gui & g, int id, const rect & r, std::vector<scene_object> & ob
         g.end_children();
     }
 
-    if(g.ml_down && r.contains(int2(g.cursor)))
+    if(g.ml_down && g.is_cursor_over(r))
     {
         if(!g.is_child_pressed(id)) g.set_pressed(id);
 
@@ -193,6 +194,8 @@ int main(int argc, char * argv[])
     glfwInit();
     auto win = glfwCreateWindow(1280, 720, "Basic Workbench App", nullptr, nullptr);
     glfwSetWindowUserPointer(win, &g);
+    glfwSetCharCallback(win, [](GLFWwindow * win, unsigned int codepoint) { reinterpret_cast<gui *>(glfwGetWindowUserPointer(win))->codepoint = codepoint; });
+    glfwSetScrollCallback(win, [](GLFWwindow * win, double x, double y) { reinterpret_cast<gui *>(glfwGetWindowUserPointer(win))->scroll = float2(double2(x,y)); });
     glfwSetKeyCallback(win, [](GLFWwindow * win, int key, int scancode, int action, int mods)
     {
         auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
@@ -202,6 +205,22 @@ int main(int argc, char * argv[])
         case GLFW_KEY_A: g->bl = action != GLFW_RELEASE; break;
         case GLFW_KEY_S: g->bb = action != GLFW_RELEASE; break;
         case GLFW_KEY_D: g->br = action != GLFW_RELEASE; break;
+        }
+        if(action == GLFW_RELEASE) return;
+        switch(key)
+        {
+        case GLFW_KEY_LEFT: g->pressed_key = ::key::left; break;
+        case GLFW_KEY_RIGHT: g->pressed_key = ::key::right; break;
+        case GLFW_KEY_UP: g->pressed_key = ::key::up; break;
+        case GLFW_KEY_DOWN: g->pressed_key = ::key::down; break;
+        case GLFW_KEY_HOME: g->pressed_key = ::key::home; break;
+        case GLFW_KEY_END: g->pressed_key = ::key::end; break;
+        case GLFW_KEY_PAGE_UP: g->pressed_key = ::key::page_up; break;
+        case GLFW_KEY_PAGE_DOWN: g->pressed_key = ::key::page_down; break;
+        case GLFW_KEY_BACKSPACE: g->pressed_key = ::key::backspace; break;
+        case GLFW_KEY_DELETE: g->pressed_key = ::key::delete_; break;
+        case GLFW_KEY_ENTER: g->pressed_key = ::key::enter; break;
+        case GLFW_KEY_ESCAPE: g->pressed_key = ::key::escape; break;       
         }
     });
     glfwSetMouseButtonCallback(win, [](GLFWwindow * win, int button, int action, int mods)
@@ -218,14 +237,9 @@ int main(int argc, char * argv[])
     glfwSetCursorPosCallback(win, [](GLFWwindow * win, double x, double y)
     {
         auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
-        const float2 cursor = {static_cast<float>(x), static_cast<float>(y)};
+        const float2 cursor = float2(double2(x,y));
         g->delta = cursor - g->cursor;
         g->cursor = cursor;
-    });
-    glfwSetScrollCallback(win, [](GLFWwindow * win, double x, double y)
-    {
-        auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
-        g->scroll = {static_cast<float>(x), static_cast<float>(y)};
     });
 
     glfwMakeContextCurrent(win);
@@ -259,6 +273,8 @@ int main(int argc, char * argv[])
     {
         g.scroll = g.delta = {0,0};
         g.ml_down = g.ml_up = false;
+        g.codepoint = 0;
+        g.pressed_key = key::none;
         glfwPollEvents();
 
         int fw, fh, w, h;

@@ -38,6 +38,13 @@ bool gui::is_pressed(int id) const
     return pressed_id.back() == id;
 }
 
+bool gui::is_focused(int id) const
+{
+    if(focused_id.size() != current_id.size() + 1) return false;
+    for(size_t i=0; i<current_id.size(); ++i) if(focused_id[i] != current_id[i]) return false;
+    return focused_id.back() == id;
+}
+
 bool gui::is_child_pressed(int id) const
 {
     if(pressed_id.size() < current_id.size() + 2) return false;
@@ -66,12 +73,30 @@ void gui::end_children()
     current_id.pop_back();
 }
 
+bool gui::is_cursor_over(const rect & r) const
+{
+    const auto & s = scissor.back();
+    return cursor.x >= r.x0 && cursor.y >= r.y0 && cursor.x < r.x1 && cursor.y < r.y1
+        && cursor.x >= s.x0 && cursor.y >= s.y0 && cursor.x < s.x1 && cursor.y < s.y1;
+}
+
 bool gui::check_click(int id, const rect & r)
 {
-    if(ml_down && r.contains(int2(cursor)))
+    if(ml_down && is_cursor_over(r))
     {
+        click_offset.x = cursor.x - r.x0;
         click_offset.y = cursor.y - r.y0;
         set_pressed(id);
+        return true;
+    }
+    return false;
+}
+
+bool gui::check_release(int id)
+{
+    if(ml_up && is_pressed(id))
+    {
+        clear_pressed();
         return true;
     }
     return false;
@@ -214,6 +239,97 @@ void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
     }
 }
 
+void edit(gui & g, int id, const rect & r, std::string & text)
+{
+    if(g.check_click(id, r))
+    {
+        g.text_cursor = g.text_mark = g.default_font.get_cursor_pos(text, g.click_offset.x - 5);
+        g.focused_id = g.pressed_id;
+    }
+    g.check_release(id);
+    if(g.is_pressed(id)) g.text_cursor = g.default_font.get_cursor_pos(text, g.cursor.x - r.x0 - 5);
+
+    if(g.is_focused(id))
+    {
+        g.text_cursor = std::min(g.text_cursor, text.size());
+        g.text_mark = std::min(g.text_mark, text.size());
+
+        if(g.codepoint)
+        {
+            if(g.text_cursor != g.text_mark)
+            {
+                auto lo = std::min(g.text_cursor, g.text_mark);
+                auto hi = std::max(g.text_cursor, g.text_mark);
+                text.erase(begin(text)+lo, begin(text)+hi);
+                g.text_cursor = g.text_mark = lo;
+            }
+
+            assert(isprint(g.codepoint)); // Only support printable ASCII for now, later, we will encode other characters in utf-8
+            text.insert(begin(text) + g.text_cursor++, (char)g.codepoint);
+            g.text_mark = g.text_cursor;
+        }
+        if(g.pressed_key != key::none)
+        {
+            switch(g.pressed_key)
+            {
+            case key::left:
+                if(g.text_cursor > 0) --g.text_cursor;
+                if(!g.shift) g.text_mark = g.text_cursor;
+                break;
+            case key::right:
+                if(g.text_cursor < text.size()) ++g.text_cursor;
+                if(!g.shift) g.text_mark = g.text_cursor;
+                break;
+            case key::home:
+                g.text_cursor = 0;
+                if(!g.shift) g.text_mark = g.text_cursor;
+                break;
+            case key::end:
+                g.text_cursor = text.size();
+                if(!g.shift) g.text_mark = g.text_cursor;
+                break;
+            case key::backspace: 
+                if(g.text_cursor != g.text_mark)
+                {
+                    auto lo = std::min(g.text_cursor, g.text_mark);
+                    auto hi = std::max(g.text_cursor, g.text_mark);
+                    text.erase(begin(text)+lo, begin(text)+hi);
+                    g.text_cursor = g.text_mark = lo;
+                }
+                else if(g.text_cursor > 0)
+                {
+                    text.erase(begin(text) + --g.text_cursor); 
+                    g.text_mark = g.text_cursor;
+                }
+                break;
+            case key::delete_: 
+                if(g.text_cursor != g.text_mark)
+                {
+                    auto lo = std::min(g.text_cursor, g.text_mark);
+                    auto hi = std::max(g.text_cursor, g.text_mark);
+                    text.erase(begin(text)+lo, begin(text)+hi);
+                    g.text_cursor = g.text_mark = lo;                    
+                }
+                if(g.text_cursor < text.size()) text.erase(begin(text) + g.text_cursor); break;
+            }
+        }
+    }
+    
+    const rect tr = {r.x0+5, r.y0+2, r.x1-5, r.y1-2};
+    draw_rounded_rect(g, r, 4, {1,1,1,1});
+    if(g.is_focused(id))
+    {
+        auto lo = std::min(g.text_cursor, g.text_mark), hi = std::max(g.text_cursor, g.text_mark);
+        draw_rect(g, {tr.x0 + g.default_font.get_text_width(text.substr(0, lo)), tr.y0, tr.x0 + g.default_font.get_text_width(text.substr(0, hi)), tr.y1}, {1,1,0,1}, {1,1,0,1});
+    }
+    draw_text(g, {tr.x0, tr.y0}, {0,0,0,1}, text);
+    if(g.is_focused(id))
+    {
+        int w = g.default_font.get_text_width(text.substr(0, g.text_cursor));
+        draw_rect(g, {tr.x0+w, tr.y0, tr.x0+w+1, tr.y1}, {0,0,0,1});
+    }
+}
+
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset)
 {
     const int scrollbar_width = 12;
@@ -224,7 +340,7 @@ rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & off
         else offset = (static_cast<int>(g.cursor.y - g.click_offset.y) - r.y0) * client_height / r.height();
     }    
 
-    if(r.contains(int2(g.cursor))) offset -= static_cast<int>(g.scroll.y * 20);
+    if(g.is_cursor_over(r)) offset -= static_cast<int>(g.scroll.y * 20);
     offset = std::min(offset, client_height - r.height());
     offset = std::max(offset, 0);
     if(client_height <= r.height()) return r;
@@ -244,7 +360,7 @@ std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split)
     if(g.is_pressed(id))
     {
         if(g.ml_up) g.clear_pressed();
-        else split = g.cursor.y - g.click_offset.y - r.y0;
+        else split = static_cast<int>(g.cursor.y - g.click_offset.y) - r.y0;
     }
 
     split = std::min(split, r.y1 - 10 - splitbar_width);
