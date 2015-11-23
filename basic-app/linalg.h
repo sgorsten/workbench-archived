@@ -54,13 +54,13 @@ namespace linalg
     template<class T, class F> vec<T,3> componentwise_apply(const vec<T,3> & a, const vec<T,3> & b, F f) { return {f(a.x,b.x), f(a.y,b.y), f(a.z,b.z)}; }
     template<class T, class F> vec<T,4> componentwise_apply(const vec<T,4> & a, const vec<T,4> & b, F f) { return {f(a.x,b.x), f(a.y,b.y), f(a.z,b.z), f(a.w,b.w)}; }
 
-    template<class T, int N> vec<T,N> operator + (const vec<T,N> & a) { return componentwise_apply(a, a, [](float l, float) { return +l; }); }
-    template<class T, int N> vec<T,N> operator - (const vec<T,N> & a) { return componentwise_apply(a, a, [](float l, float) { return -l; }); }
+    template<class T, int N> vec<T,N> operator + (const vec<T,N> & a) { return componentwise_apply(a, a, [](T l, T) { return +l; }); }
+    template<class T, int N> vec<T,N> operator - (const vec<T,N> & a) { return componentwise_apply(a, a, [](T l, T) { return -l; }); }
 
-    template<class T, int N> vec<T,N> operator + (const vec<T,N> & a, const vec<T,N> & b) { return componentwise_apply(a, b, [](float l, float r) { return l + r; }); }
-    template<class T, int N> vec<T,N> operator - (const vec<T,N> & a, const vec<T,N> & b) { return componentwise_apply(a, b, [](float l, float r) { return l - r; }); }
-    template<class T, int N> vec<T,N> operator * (const vec<T,N> & a, const vec<T,N> & b) { return componentwise_apply(a, b, [](float l, float r) { return l * r; }); }
-    template<class T, int N> vec<T,N> operator / (const vec<T,N> & a, const vec<T,N> & b) { return componentwise_apply(a, b, [](float l, float r) { return l / r; }); }
+    template<class T, int N> vec<T,N> operator + (const vec<T,N> & a, const vec<T,N> & b) { return componentwise_apply(a, b, [](T l, T r) { return l + r; }); }
+    template<class T, int N> vec<T,N> operator - (const vec<T,N> & a, const vec<T,N> & b) { return componentwise_apply(a, b, [](T l, T r) { return l - r; }); }
+    template<class T, int N> vec<T,N> operator * (const vec<T,N> & a, const vec<T,N> & b) { return componentwise_apply(a, b, [](T l, T r) { return l * r; }); }
+    template<class T, int N> vec<T,N> operator / (const vec<T,N> & a, const vec<T,N> & b) { return componentwise_apply(a, b, [](T l, T r) { return l / r; }); }
 
     template<class T, int N> vec<T,N> operator + (const vec<T,N> & a, T b) { return a + vec<T,N>(b); }
     template<class T, int N> vec<T,N> operator - (const vec<T,N> & a, T b) { return a - vec<T,N>(b); }

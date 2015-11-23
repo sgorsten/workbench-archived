@@ -44,6 +44,7 @@ void render_gizmo(const gui & g)
 
 struct scene_object
 {
+    std::string name;
     const geometry_mesh * mesh;
     float3 position;
 };
@@ -75,31 +76,68 @@ float3 get_center_of_mass(const std::set<scene_object *> & objects)
 void object_list_ui(gui & g, int id, const rect & r, std::vector<scene_object> & objects, std::set<scene_object *> & selection, int & offset)
 {
     draw_rect(g, r, {0.3f,0.3f,0.3f,1});
-    vscroll_panel(g, 1, r, objects.size()*30+20, offset);
+    vscroll_panel(g, id, r, objects.size()*30+20, offset);
     g.begin_childen(id);
     g.begin_scissor(r);
     int y0 = 10 - offset;
-    for(size_t i=0; i<objects.size(); ++i)
+    for(auto & obj : objects)
     {
         rect list_entry = {r.x0 + 10, y0, r.x1 - 10, y0 + 30};
         if(g.ml_down && list_entry.contains(int2(g.cursor)))
         {
             if(!g.ctrl) selection.clear();
-            auto it = selection.find(&objects[i]);
-            if(it == end(selection)) selection.insert(&objects[i]);
+            auto it = selection.find(&obj);
+            if(it == end(selection)) selection.insert(&obj);
             else selection.erase(it);
             g.gizmode = gizmo_mode::none;
         }
 
-        bool selected = selection.find(&objects[i]) != end(selection);
-        std::ostringstream ss; ss << "Object " << (i+1);
-        draw_text(g, {r.x0 + 11, y0 + 1}, float4(0,0,0,1), ss.str());
-        draw_text(g, {r.x0 + 10, y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), ss.str());
+        bool selected = selection.find(&obj) != end(selection);
+        draw_text(g, {r.x0 + 11, y0 + 1}, float4(0,0,0,1), obj.name);
+        draw_text(g, {r.x0 + 10, y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj.name);
         y0 += 30;
     }
     g.end_scissor();
     g.end_children();
 }
+
+void viewport_ui(gui & g, int id, const rect & r, std::vector<scene_object> & objects, std::set<scene_object *> & selection)
+{
+    if(!selection.empty())
+    {
+        g.begin_childen(id);
+        float3 com = get_center_of_mass(selection), new_com = com;
+        position_gizmo(g, 1, new_com);
+        if(new_com != com) for(auto obj : selection) obj->position += new_com - com;
+        g.end_children();
+    }
+
+    if(g.ml_down && r.contains(int2(g.cursor)))
+    {
+        if(!g.is_child_pressed(id)) g.set_pressed(id);
+
+        if(!selection.empty() && g.gizmode == gizmo_mode::none && !g.ctrl) selection.clear();
+
+        if(selection.empty() || g.ctrl)
+        {
+            if(auto picked_object = raycast(g.get_ray_from_cursor(), objects))
+            {
+                auto it = selection.find(picked_object);
+                if(it == end(selection)) selection.insert(picked_object);
+                else selection.erase(it);
+                g.gizmode = gizmo_mode::none;
+            }
+        }
+    }
+
+    if(g.is_pressed(id))
+    {
+        if(g.mr) do_mouselook(g, 0.01f);
+        move_wasd(g, 8.0f);
+    }
+}
+
+
 
 int main(int argc, char * argv[])
 {
@@ -111,7 +149,7 @@ int main(int argc, char * argv[])
 
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
-    std::vector<scene_object> objects = {{&box, {-1,0,0}}, {&cylinder, {0,0,0}}, {&box, {+1,0,0}}};
+    std::vector<scene_object> objects = {{"Box", &box, {-1,0,0}}, {"Cylinder", &cylinder, {0,0,0}}, {"Box 2", &box, {+1,0,0}}};
     std::set<scene_object *> selection;
 
     glfwInit();
@@ -193,34 +231,8 @@ int main(int argc, char * argv[])
         g.timestep = static_cast<float>(t1-t0);
         t0 = t1;
 
-        if(g.mr) do_mouselook(g, 0.01f);
-        move_wasd(g, 8.0f);
-
-        if(!selection.empty())
-        {
-            float3 com = get_center_of_mass(selection), new_com = com;
-            position_gizmo(g, new_com);
-            if(new_com != com) for(auto obj : selection) obj->position += new_com - com;
-        }
-
-        if(g.ml_down)
-        {
-            if(!selection.empty() && g.gizmode == gizmo_mode::none && !g.ctrl) selection.clear();
-
-            if(selection.empty() || g.ctrl)
-            {
-                if(auto picked_object = raycast(g.get_ray_from_cursor(), objects))
-                {
-                    auto it = selection.find(picked_object);
-                    if(it == end(selection)) selection.insert(picked_object);
-                    else selection.erase(it);
-                    g.gizmode = gizmo_mode::none;
-                }
-            }
-        }
-
-        // Draw 2D UI
-        object_list_ui(g, 1, {w-200, 0, w, h}, objects, selection, offset);
+        viewport_ui(g, 1, {0, 0, w-200, h}, objects, selection);
+        object_list_ui(g, 2, {w-200, 0, w, h}, objects, selection, offset);
         g.end_frame();
 
         glfwGetFramebufferSize(win, &w, &h);

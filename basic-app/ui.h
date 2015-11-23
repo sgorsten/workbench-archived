@@ -63,6 +63,7 @@ struct gui
 
     // API for determining clicked status
     bool is_pressed(int id) const;
+    bool is_child_pressed(int id) const;
     void set_pressed(int id);
     void clear_pressed();
     void begin_childen(int id);
@@ -97,8 +98,8 @@ void do_mouselook(gui & g, float sensitivity);
 void move_wasd(gui & g, float speed);
 
 // 3D manipulation interactions
-void plane_translation_gizmo(gui & g, const float3 & plane_normal, float3 & point);
-void axis_translation_gizmo(gui & g, const float3 & axis, float3 & point);
-void position_gizmo(gui & g, float3 & position);
+void plane_translation_dragger(gui & g, const float3 & plane_normal, float3 & point);
+void axis_translation_dragger(gui & g, const float3 & axis, float3 & point);
+void position_gizmo(gui & g, int id, float3 & position);
 
 #endif
