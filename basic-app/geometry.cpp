@@ -115,3 +115,29 @@ geometry_mesh make_cylinder_geometry(const float3 & axis, const float3 & arm1, c
     }
     return mesh;
 }
+
+geometry_mesh make_lathed_geometry(const float3 & axis, const float3 & arm1, const float3 & arm2, int slices, std::initializer_list<float2> points)
+{
+    geometry_mesh mesh;
+    for(int i=0; i<=slices; ++i)
+    {
+        const float angle = static_cast<float>(i%slices) * tau / slices, c = std::cos(angle), s = std::sin(angle);
+        const float3x2 mat = {axis, arm1 * c + arm2 * s};
+        float3 n = normalize(mat.y); // TODO: Proper normals for each segment
+        for(auto & p : points) mesh.vertices.push_back({mat * p, n});
+
+        if(i > 0)
+        {
+            for(size_t j = 1; j < points.size(); ++j)
+            {
+                int i0 = (i-1)*points.size() + (j-1);
+                int i1 = (i-0)*points.size() + (j-1);
+                int i2 = (i-0)*points.size() + (j-0);
+                int i3 = (i-1)*points.size() + (j-0);
+                mesh.triangles.push_back({i0,i1,i2});
+                mesh.triangles.push_back({i0,i2,i3});
+            }
+        }
+    }
+    return mesh;
+}

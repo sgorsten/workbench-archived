@@ -28,8 +28,6 @@ struct camera
     ray get_ray_from_pixel(const float2 & pixel, const rect & viewport) const;
 };
 
-
-
 enum class key { none, left, right, up, down, home, end, page_up, page_down, backspace, delete_, enter, escape };
 enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
 

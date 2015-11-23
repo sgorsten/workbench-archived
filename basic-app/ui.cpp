@@ -24,9 +24,10 @@ gui::gui() : bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(),
     for(int i=1; i<=32; ++i) default_font.make_circle_quadrant(i);
     default_font.prepare_texture();
 
-    gizmo_meshes[0] = make_cylinder_geometry({1,0,0}, {0,0.05f,0}, {0,0,0.05f}, 12);
-    gizmo_meshes[1] = make_cylinder_geometry({0,1,0}, {0,0,0.05f}, {0.05f,0,0}, 12);
-    gizmo_meshes[2] = make_cylinder_geometry({0,0,1}, {0.05f,0,0}, {0,0.05f,0}, 12);
+    std::initializer_list<float2> points = {{0, 0.05f}, {1, 0.05f}, {1, 0.10f}, {1.2f, 0}};
+    gizmo_meshes[0] = make_lathed_geometry({1,0,0}, {0,1,0}, {0,0,1}, 12, points);
+    gizmo_meshes[1] = make_lathed_geometry({0,1,0}, {0,0,1}, {1,0,0}, 12, points);
+    gizmo_meshes[2] = make_lathed_geometry({0,0,1}, {1,0,0}, {0,1,0}, 12, points);
     gizmo_meshes[3] = make_box_geometry({-0.01f,0,0}, {0.01f,0.4f,0.4f});
     gizmo_meshes[4] = make_box_geometry({0,-0.01f,0}, {0.4f,0.01f,0.4f});
     gizmo_meshes[5] = make_box_geometry({0,0,-0.01f}, {0.4f,0.4f,0.01f});
