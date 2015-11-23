@@ -47,7 +47,7 @@ struct scene_object
 {
     std::string name;
     const geometry_mesh * mesh;
-    float3 position;
+    float3 position, diffuse;
 };
 
 scene_object * raycast(const ray & ray, std::vector<scene_object> & objects)
@@ -117,6 +117,8 @@ void object_properties_ui(gui & g, int id, const rect & r, std::set<scene_object
     y0 += line_height + 2;
     edit(g, 2, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.position);
     y0 += line_height + 2;
+    edit(g, 3, {panel.x0 + 10, y0, panel.x1 - 10, y0 + line_height}, obj.diffuse);
+    y0 += line_height + 2;
 
     g.end_scissor();
     g.end_children();
@@ -132,11 +134,10 @@ void viewport_ui(gui & g, int id, const rect & r, std::vector<scene_object> & ob
         if(new_com != com) for(auto obj : selection) obj->position += new_com - com;
         g.end_children();
     }
+    if(g.is_child_pressed(id)) return;
 
-    if(g.ml_down && g.is_cursor_over(r))
+    if(g.check_click(id, r))
     {
-        if(!g.is_child_pressed(id)) g.set_pressed(id);
-
         if(!selection.empty() && g.gizmode == gizmo_mode::none && !g.ctrl) selection.clear();
 
         if(selection.empty() || g.ctrl)
@@ -190,7 +191,11 @@ int main(int argc, char * argv[])
 
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
-    std::vector<scene_object> objects = {{"Box", &box, {-1,0,0}}, {"Cylinder", &cylinder, {0,0,0}}, {"Box 2", &box, {+1,0,0}}};
+    std::vector<scene_object> objects = {
+        {"Box", &box, {-1,0,0}, {1,0.5f,0.5f}},
+        {"Cylinder", &cylinder, {0,0,0}, {0.5f,1,0.5f}},
+        {"Box 2", &box, {+1,0,0}, {0.5f,0.5f,1}}
+    };
     std::set<scene_object *> selection;
     
     glfwInit();
@@ -330,7 +335,7 @@ int main(int argc, char * argv[])
         for(auto & obj : objects)
         {            
             gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(obj.position));
-            gl_color(selection.find(&obj) == end(selection) ? float3(1,1,1) : float3(1,1,0.8f)); render_geometry(*obj.mesh);
+            gl_color(obj.diffuse); render_geometry(*obj.mesh);
         }
 
         if(!selection.empty())

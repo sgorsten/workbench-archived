@@ -349,6 +349,11 @@ bool edit(gui & g, int id, const rect & r, float & number)
     ss << number;
     std::string text = ss.str();
     if(!edit(g, id, r, text)) return false;
+    if(text.empty() && number != 0)
+    {
+        number = 0;
+        return true;
+    }
     return !!(std::istringstream(text) >> number);
 }
 
