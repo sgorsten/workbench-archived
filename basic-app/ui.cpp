@@ -203,8 +203,10 @@ void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
     }
 }
 
-void vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset)
+rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset)
 {
+    const int scrollbar_width = 12;
+
     if(g.is_pressed(id))
     {
         if(g.ml_up) g.clear_pressed();
@@ -214,17 +216,43 @@ void vscroll_panel(gui & g, int id, const rect & r, int client_height, int & off
     if(r.contains(int2(g.cursor))) offset -= static_cast<int>(g.scroll.y * 20);
     offset = std::min(offset, client_height - r.height());
     offset = std::max(offset, 0);
-    if(client_height <= r.height()) return;
+    if(client_height <= r.height()) return r;
 
-    draw_rect(g, {r.x1-12, r.y0, r.x1, r.y1}, {0.5f,0.5f,0.5f,1}); // Track
+    draw_rect(g, {r.x1-scrollbar_width, r.y0, r.x1, r.y1}, {0.5f,0.5f,0.5f,1}); // Track
 
-    rect tab = {r.x1-12, r.y0 + offset * r.height() / client_height, r.x1, r.y0 + (offset + r.height()) * r.height() / client_height};
+    rect tab = {r.x1-scrollbar_width, r.y0 + offset * r.height() / client_height, r.x1, r.y0 + (offset + r.height()) * r.height() / client_height};
     if(g.ml_down && tab.contains(int2(g.cursor)))
     {
         g.set_pressed(id);
         g.click_offset.y = g.cursor.y - tab.y0;
     }
-    draw_rounded_rect(g, tab, 5, {0.8f,0.8f,0.8f,1}); // Tab
+    draw_rounded_rect(g, tab, (scrollbar_width-2)/2, {0.8f,0.8f,0.8f,1}); // Tab
+    return {r.x0, r.y0, r.x1-scrollbar_width, r.y1};
+}
+
+std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split)
+{
+    const int splitbar_width = 6;
+
+    if(g.is_pressed(id))
+    {
+        if(g.ml_up) g.clear_pressed();
+        else split = g.cursor.y - g.click_offset.y - r.y0;
+    }
+
+    split = std::min(split, r.y1 - 10 - splitbar_width);
+    split = std::max(split, r.y0 + 10);
+
+    rect splitbar = {r.x0, r.y0 + split, r.x1, r.y0 + split + splitbar_width};
+    if(g.ml_down && splitbar.contains(int2(g.cursor)))
+    {
+        g.click_offset.y = g.cursor.y - splitbar.y0;
+        g.set_pressed(id);
+    }
+
+    draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
+
+    return {{r.x0, r.y0, r.x1, splitbar.y0}, {r.x0, splitbar.y1, r.x1, r.y1}};
 }
 
 void do_mouselook(gui & g, float sensitivity)

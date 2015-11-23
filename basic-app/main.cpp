@@ -76,13 +76,13 @@ float3 get_center_of_mass(const std::set<scene_object *> & objects)
 void object_list_ui(gui & g, int id, const rect & r, std::vector<scene_object> & objects, std::set<scene_object *> & selection, int & offset)
 {
     draw_rect(g, r, {0.3f,0.3f,0.3f,1});
-    vscroll_panel(g, id, r, objects.size()*30+20, offset);
+    auto panel = vscroll_panel(g, id, r, objects.size()*30+20, offset);
     g.begin_childen(id);
-    g.begin_scissor(r);
-    int y0 = 10 - offset;
+    g.begin_scissor(panel);
+    int y0 = panel.y0 + 10 - offset;
     for(auto & obj : objects)
     {
-        rect list_entry = {r.x0 + 10, y0, r.x1 - 10, y0 + 30};
+        rect list_entry = {panel.x0 + 10, y0, panel.x1 - 10, y0 + 30};
         if(g.ml_down && list_entry.contains(int2(g.cursor)))
         {
             if(!g.ctrl) selection.clear();
@@ -93,8 +93,8 @@ void object_list_ui(gui & g, int id, const rect & r, std::vector<scene_object> &
         }
 
         bool selected = selection.find(&obj) != end(selection);
-        draw_text(g, {r.x0 + 11, y0 + 1}, float4(0,0,0,1), obj.name);
-        draw_text(g, {r.x0 + 10, y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj.name);
+        draw_text(g, {list_entry.x0 + 1, list_entry.y0 + 1}, float4(0,0,0,1), obj.name);
+        draw_text(g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj.name);
         y0 += 30;
     }
     g.end_scissor();
@@ -137,8 +137,6 @@ void viewport_ui(gui & g, int id, const rect & r, std::vector<scene_object> & ob
     }
 }
 
-
-
 int main(int argc, char * argv[])
 {
     gui g;
@@ -151,7 +149,7 @@ int main(int argc, char * argv[])
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
     std::vector<scene_object> objects = {{"Box", &box, {-1,0,0}}, {"Cylinder", &cylinder, {0,0,0}}, {"Box 2", &box, {+1,0,0}}};
     std::set<scene_object *> selection;
-
+    
     glfwInit();
     auto win = glfwCreateWindow(1280, 720, "Basic Workbench App", nullptr, nullptr);
     glfwSetWindowUserPointer(win, &g);
@@ -215,7 +213,7 @@ int main(int argc, char * argv[])
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-    int offset = 0;
+    int split = 358, offset0 = 0, offset1 = 0;
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
@@ -232,7 +230,9 @@ int main(int argc, char * argv[])
         t0 = t1;
 
         viewport_ui(g, 1, {0, 0, w-200, h}, objects, selection);
-        object_list_ui(g, 2, {w-200, 0, w, h}, objects, selection, offset);
+        auto s = vsplitter(g, 2, {w-200, 0, w, h}, split);
+        object_list_ui(g, 3, s.first, objects, selection, offset0);
+        object_list_ui(g, 4, s.second, objects, selection, offset1);
         g.end_frame();
 
         glfwGetFramebufferSize(win, &w, &h);
