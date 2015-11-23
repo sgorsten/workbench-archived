@@ -452,32 +452,6 @@ void axis_translation_dragger(gui & g, const float3 & axis, float3 & point)
 
 void position_gizmo(gui & g, int id, float3 & position)
 {
-    if(g.is_pressed(id))
-    {
-        // If the user has previously clicked on a gizmo component, allow the user to interact with that gizmo
-        if(g.gizmode != gizmo_mode::none)
-        {
-            position += g.click_offset;
-            switch(g.gizmode)
-            {
-            case gizmo_mode::translate_x: axis_translation_dragger(g, {1,0,0}, position); break;
-            case gizmo_mode::translate_y: axis_translation_dragger(g, {0,1,0}, position); break;
-            case gizmo_mode::translate_z: axis_translation_dragger(g, {0,0,1}, position); break;
-            case gizmo_mode::translate_yz: plane_translation_dragger(g, {1,0,0}, position); break;
-            case gizmo_mode::translate_zx: plane_translation_dragger(g, {0,1,0}, position); break;
-            case gizmo_mode::translate_xy: plane_translation_dragger(g, {0,0,1}, position); break;
-            }        
-            position -= g.click_offset;
-        }
-
-        // On release, deactivate the current gizmo mode
-        if(g.ml_up)
-        {
-            g.gizmode = gizmo_mode::none;
-            g.clear_pressed();
-        }
-    }
-
     // On click, set the gizmo mode based on which component the user clicked on
     if(g.ml_down)
     {
@@ -497,4 +471,23 @@ void position_gizmo(gui & g, int id, float3 & position)
             g.set_pressed(id);
         }
     }
+
+    // If the user has previously clicked on a gizmo component, allow the user to interact with that gizmo
+    if(g.is_pressed(id))
+    {
+        position += g.click_offset;
+        switch(g.gizmode)
+        {
+        case gizmo_mode::translate_x: axis_translation_dragger(g, {1,0,0}, position); break;
+        case gizmo_mode::translate_y: axis_translation_dragger(g, {0,1,0}, position); break;
+        case gizmo_mode::translate_z: axis_translation_dragger(g, {0,0,1}, position); break;
+        case gizmo_mode::translate_yz: plane_translation_dragger(g, {1,0,0}, position); break;
+        case gizmo_mode::translate_zx: plane_translation_dragger(g, {0,1,0}, position); break;
+        case gizmo_mode::translate_xy: plane_translation_dragger(g, {0,0,1}, position); break;
+        }        
+        position -= g.click_offset;
+    }
+
+    // On release, deactivate the current gizmo mode
+    if(g.check_release(id)) g.gizmode = gizmo_mode::none;
 }
