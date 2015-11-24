@@ -211,7 +211,7 @@ void gui::add_glyph(const rect & r_, float s0, float t0, float s1, float t1, con
 void draw_rect(gui & g, const rect & r, const float4 & color) { draw_rect(g, r, color, color); }
 void draw_rect(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
 {
-    const float s = 0.5f / g.default_font.tex_size.x, t = 0.5f / g.default_font.tex_size.y;
+    const float s = 0.5f / g.default_font.get_texture_size().x, t = 0.5f / g.default_font.get_texture_size().y;
     g.add_glyph(r, s, t, s, t, top_color, bottom_color);
 }
 

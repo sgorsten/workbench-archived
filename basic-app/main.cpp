@@ -291,7 +291,7 @@ int main(int argc, char * argv[])
     GLuint font_tex = 0;
     glGenTextures(1, &font_tex);
     glBindTexture(GL_TEXTURE_2D, font_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, g.default_font.tex_size.x, g.default_font.tex_size.y, 0, GL_ALPHA, GL_UNSIGNED_BYTE, g.default_font.tex_pixels.data());
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, g.default_font.get_texture_size().x, g.default_font.get_texture_size().y, 0, GL_ALPHA, GL_UNSIGNED_BYTE, g.default_font.get_texture_data());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
