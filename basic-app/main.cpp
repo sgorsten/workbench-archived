@@ -35,11 +35,11 @@ void render_gizmo(const gui & g)
     gl_color(g.gizmode == gizmo_mode::translate_xy ? float3(1,1,0.5f) : float3(1,1,0)); render_geometry(g.gizmo_meshes[5]);
 }
 
-void render_gui(const gui & g, GLuint glyph_tex)
+void render_gui(const gui & g, GLuint sprite_tex)
 {
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); glOrtho(0, g.window_size.x, g.window_size.y, 0, -1, +1);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
-    glEnable(GL_TEXTURE_2D); glBindTexture(GL_TEXTURE_2D, glyph_tex);
+    glEnable(GL_TEXTURE_2D); glBindTexture(GL_TEXTURE_2D, sprite_tex);
     glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     const GLenum states[] = {GL_VERTEX_ARRAY, GL_COLOR_ARRAY, GL_TEXTURE_COORD_ARRAY};
@@ -200,11 +200,15 @@ void end_3d()
 
 int main(int argc, char * argv[])
 {
-    gui g;
+    sprite_sheet sprites;
+
+    gui g(sprites);
     g.cam.yfov = 1.0f;
     g.cam.near_clip = 0.1f;
     g.cam.far_clip = 16.0f;
     g.cam.position = {0,1.5f,4};
+
+    sprites.prepare_texture();
 
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
@@ -288,10 +292,10 @@ int main(int argc, char * argv[])
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-    GLuint font_tex = 0;
-    glGenTextures(1, &font_tex);
-    glBindTexture(GL_TEXTURE_2D, font_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, g.default_font.get_texture_size().x, g.default_font.get_texture_size().y, 0, GL_ALPHA, GL_UNSIGNED_BYTE, g.default_font.get_texture_data());
+    GLuint sprite_tex = 0;
+    glGenTextures(1, &sprite_tex);
+    glBindTexture(GL_TEXTURE_2D, sprite_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, sprites.get_texture_dims().x, sprites.get_texture_dims().y, 0, GL_ALPHA, GL_UNSIGNED_BYTE, sprites.get_texture_data());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
@@ -383,7 +387,7 @@ int main(int argc, char * argv[])
 
         end_3d();
 
-        render_gui(g, font_tex);
+        render_gui(g, sprite_tex);
 
         glPopAttrib();
 

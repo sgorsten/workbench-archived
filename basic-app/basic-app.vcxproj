@@ -156,12 +156,14 @@
     <ClCompile Include="font.cpp" />
     <ClCompile Include="geometry.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="sprite.cpp" />
     <ClCompile Include="ui.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="font.h" />
     <ClInclude Include="geometry.h" />
     <ClInclude Include="linalg.h" />
+    <ClInclude Include="sprite.h" />
     <ClInclude Include="ui.h" />
   </ItemGroup>
   <ItemGroup>

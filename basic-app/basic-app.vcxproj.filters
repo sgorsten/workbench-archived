@@ -13,6 +13,9 @@
     <ClCompile Include="font.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="sprite.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="geometry.h">
@@ -25,6 +28,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="font.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="sprite.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

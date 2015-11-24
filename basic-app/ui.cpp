@@ -16,13 +16,12 @@ ray camera::get_ray_from_pixel(const float2 & pixel, const rect & viewport) cons
     return {position, p1.xyz()*p0.w - p0.xyz()*p1.w};
 }
 
-gui::gui() : bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(), cam({}), gizmode() 
+gui::gui(sprite_sheet & sprites) : sprites(sprites), default_font(&sprites), bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(), cam({}), gizmode() 
 {
     std::vector<int> codepoints;
     for(int i=0; i<128; ++i) if(isprint(i)) codepoints.push_back(i);
     default_font.load_glyphs("c:/windows/fonts/arialbd.ttf", 14, codepoints);
-    for(int i=1; i<=32; ++i) default_font.make_circle_quadrant(i);
-    default_font.prepare_texture();
+    for(int i=1; i<=32; ++i) corner_sprites[i] = sprites.insert_sprite(make_circle_quadrant(i));
 
     std::initializer_list<float2> points = {{0, 0.05f}, {1, 0.05f}, {1, 0.10f}, {1.2f, 0}};
     gizmo_meshes[0] = make_lathed_geometry({1,0,0}, {0,1,0}, {0,0,1}, 12, points);
@@ -211,7 +210,7 @@ void gui::add_glyph(const rect & r_, float s0, float t0, float s1, float t1, con
 void draw_rect(gui & g, const rect & r, const float4 & color) { draw_rect(g, r, color, color); }
 void draw_rect(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
 {
-    const float s = 0.5f / g.default_font.get_texture_size().x, t = 0.5f / g.default_font.get_texture_size().y;
+    const float s = 0.5f / g.sprites.get_texture_dims().x, t = 0.5f / g.sprites.get_texture_dims().y;
     g.add_glyph(r, s, t, s, t, top_color, bottom_color);
 }
 
@@ -219,22 +218,22 @@ void draw_rounded_rect_top(gui & g, const rect & r, const float4 & top_color, co
 {
     const int radius = r.height();
     draw_rect(g, {r.x0+radius, r.y0, r.x1-radius, r.y0+radius}, top_color, bottom_color);
-    if(auto * glyph = g.default_font.get_glyph(-radius))
-    {
-        g.add_glyph({r.x0, r.y0, r.x0+radius, r.y0+radius}, glyph->s1, glyph->t1, glyph->s0, glyph->t0, top_color, bottom_color);
-        g.add_glyph({r.x1-radius, r.y0, r.x1, r.y0+radius}, glyph->s0, glyph->t1, glyph->s1, glyph->t0, top_color, bottom_color);
-    }
+    auto it = g.corner_sprites.find(radius);
+    if(it == end(g.corner_sprites)) return;
+    auto & sprite = g.sprites.get_sprite(it->second);
+    g.add_glyph({r.x0, r.y0, r.x0+radius, r.y0+radius}, sprite.s1, sprite.t1, sprite.s0, sprite.t0, top_color, bottom_color);
+    g.add_glyph({r.x1-radius, r.y0, r.x1, r.y0+radius}, sprite.s0, sprite.t1, sprite.s1, sprite.t0, top_color, bottom_color);
 }
 
 void draw_rounded_rect_bottom(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
 {
     const int radius = r.height();
     draw_rect(g, {r.x0+radius, r.y1-radius, r.x1-radius, r.y1}, top_color, bottom_color);
-    if(auto * glyph = g.default_font.get_glyph(-radius))
-    {
-        g.add_glyph({r.x0, r.y1-radius, r.x0+radius, r.y1}, glyph->s1, glyph->t0, glyph->s0, glyph->t1, top_color, bottom_color);
-        g.add_glyph({r.x1-radius, r.y1-radius, r.x1, r.y1}, glyph->s0, glyph->t0, glyph->s1, glyph->t1, top_color, bottom_color);
-    }
+    auto it = g.corner_sprites.find(radius);
+    if(it == end(g.corner_sprites)) return;
+    auto & sprite = g.sprites.get_sprite(it->second);
+    g.add_glyph({r.x0, r.y1-radius, r.x0+radius, r.y1}, sprite.s1, sprite.t0, sprite.s0, sprite.t1, top_color, bottom_color);
+    g.add_glyph({r.x1-radius, r.y1-radius, r.x1, r.y1}, sprite.s0, sprite.t0, sprite.s1, sprite.t1, top_color, bottom_color);
 }
 
 void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color) { draw_rounded_rect(g, r, radius, color, color); }
@@ -254,8 +253,9 @@ void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
     {
         if(auto * glyph = g.default_font.get_glyph(ch))
         {
-            const int2 p0 = p + glyph->offset, p1 = p0 + glyph->dims;
-            g.add_glyph({p0.x, p0.y, p1.x, p1.y}, glyph->s0, glyph->t0, glyph->s1, glyph->t1, c, c);
+            auto & s = g.sprites.get_sprite(glyph->sprite_index);
+            const int2 p0 = p + glyph->offset, p1 = p0 + s.dims;
+            g.add_glyph({p0.x, p0.y, p1.x, p1.y}, s.s0, s.t0, s.s1, s.t1, c, c);
             p.x += glyph->advance;
         }
     }

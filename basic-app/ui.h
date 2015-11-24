@@ -36,6 +36,10 @@ struct gui
 {
     struct vertex { short2 position; byte4 color; float2 texcoord; };    
     struct list { size_t level,first,last; };
+
+    sprite_sheet & sprites;
+    std::map<int, size_t> corner_sprites;
+
     std::vector<vertex> vertices;
     std::vector<list> lists;
     std::vector<rect> scissor;
@@ -67,7 +71,7 @@ struct gui
     float3 original_position;       // Original position of an object being manipulated with a gizmo
     float3 click_offset;            // Offset from position of grabbed object to coordinates of clicked point
 
-    gui();
+    gui(sprite_sheet & sprites);
 
     // API for determining clicked status
     bool is_pressed(int id) const;
