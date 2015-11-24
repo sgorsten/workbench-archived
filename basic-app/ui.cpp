@@ -53,6 +53,13 @@ bool gui::is_child_pressed(int id) const
     return pressed_id[current_id.size()] == id;
 }
 
+bool gui::is_child_focused(int id) const
+{
+    if(focused_id.size() < current_id.size() + 2) return false;
+    for(size_t i=0; i<current_id.size(); ++i) if(focused_id[i] != current_id[i]) return false;
+    return focused_id[current_id.size()] == id;
+}
+
 void gui::set_pressed(int id)
 {
     pressed_id = current_id;
@@ -64,7 +71,7 @@ void gui::clear_pressed()
     pressed_id.clear();
 }
 
-void gui::begin_childen(int id)
+void gui::begin_children(int id)
 {
     current_id.push_back(id);
 }
@@ -210,8 +217,8 @@ void gui::add_glyph(const rect & r_, float s0, float t0, float s1, float t1, con
 void draw_rect(gui & g, const rect & r, const float4 & color) { draw_rect(g, r, color, color); }
 void draw_rect(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
 {
-    const float s = 0.5f / g.sprites.get_texture_dims().x, t = 0.5f / g.sprites.get_texture_dims().y;
-    g.add_glyph(r, s, t, s, t, top_color, bottom_color);
+    auto & sprite = g.sprites.get_sprite(0);
+    g.add_glyph(r, sprite.s0, sprite.t0, sprite.s1, sprite.t1, top_color, bottom_color);
 }
 
 void draw_rounded_rect_top(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
@@ -388,7 +395,7 @@ bool edit(gui & g, int id, const rect & r, float & number)
 template<class T, int N> bool edit_vector(gui & g, int id, const rect & r, linalg::vec<T,N> & vec)
 {
     bool changed = false;
-    g.begin_childen(id);
+    g.begin_children(id);
     const int w = r.width() - (N-1)*2;    
     for(int i=0; i<N; ++i) changed |= edit(g, i, {r.x0 + w*i/N + i*2, r.y0, r.x0 + w*(i+1)/N + i*2, r.y1}, vec[i]);
     g.end_children();
@@ -461,6 +468,98 @@ std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split)
     g.check_click(id, splitbar);
     return {{r.x0, r.y0, r.x1, splitbar.y0}, {r.x0, splitbar.y1, r.x1, r.y1}};
 }
+
+///////////
+// Menus //
+///////////
+
+void begin_menu(gui & g, int id, const rect & r)
+{
+    draw_rect(g, r, cap_color);
+
+    g.menu_stack.clear();
+    g.menu_stack.push_back({{r.x0+10, r.y0, r.x0+10, r.y1}, true});
+
+    g.begin_children(id);
+}
+
+static rect get_next_menu_item_rect(gui & g, rect & r, const std::string & caption)
+{
+    if(g.menu_stack.size() == 1)
+    {
+        const rect item = {r.x1, r.y0 + (r.height() - g.default_font.line_height) / 2, r.x1 + g.default_font.get_text_width(caption), r.y0 + (r.height() + g.default_font.line_height) / 2};
+        r.x1 = item.x1 + 30;
+        return item;
+    }
+    else
+    {
+        const rect item = {r.x0 + 4, r.y1, r.x0 + 8 + g.default_font.get_text_width(caption), r.y1 + g.default_font.line_height};
+        r.x1 = std::max(r.x1, item.x1);
+        r.y1 = item.y1 + 4;
+        return item;    
+    }
+}
+
+void begin_popup(gui & g, int id, const std::string & caption)
+{
+    auto & f = g.menu_stack.back();
+    const rect item = get_next_menu_item_rect(g, f.r, caption);
+
+    if(f.open)
+    {
+        if(g.is_cursor_over(item)) draw_rect(g, item, {0.5f,0.5f,0,1});
+        draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, caption);
+        if(g.check_click(id, item)) g.focused_id = g.pressed_id;
+    }
+    
+    if(g.menu_stack.size() == 1) g.menu_stack.push_back({{item.x0, item.y1, item.x1, item.y1+4}, g.is_focused(id) || g.is_child_focused(id)});
+    else g.menu_stack.push_back({{item.x1, item.y0-1, item.x1, item.y0+3}, g.is_focused(id) || g.is_child_focused(id)});
+    g.begin_overlay();
+    g.begin_overlay();
+    g.begin_children(id);
+}
+
+bool menu_item(gui & g, const std::string & caption)
+{
+    auto & f = g.menu_stack.back();
+    const rect item = get_next_menu_item_rect(g, f.r, caption);
+
+    if(f.open)
+    {
+        if(g.is_cursor_over(item)) draw_rect(g, item, {0.5f,0.5f,0,1});
+        draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, caption);
+        if(g.is_cursor_over(item) && g.ml_down)
+        {
+            g.focused_id.clear();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void end_popup(gui & g)
+{
+    g.end_children();
+    g.end_overlay();
+    if(g.menu_stack.back().open)
+    {
+        const auto & r = g.menu_stack.back().r;
+        draw_rect(g, r, {0.5f,0.5f,0.5f,1});
+        draw_rect(g, {r.x0+1, r.y0+1, r.x1-1, r.y1-1}, {0.2f,0.2f,0.2f,1});
+    }
+    g.end_overlay();
+    g.menu_stack.pop_back();
+}
+
+void end_menu(gui & g)
+{
+    g.end_children();
+}
+
+/////////////////
+// 3D controls //
+/////////////////
 
 void do_mouselook(gui & g, float sensitivity)
 {

@@ -31,6 +31,7 @@ struct camera
 enum class cursor_icon { arrow, ibeam, hresize, vresize };
 enum class key { none, left, right, up, down, home, end, page_up, page_down, backspace, delete_, enter, escape };
 enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
+struct menu_stack_frame { rect r; bool open; };
 
 struct gui
 {
@@ -71,15 +72,18 @@ struct gui
     float3 original_position;       // Original position of an object being manipulated with a gizmo
     float3 click_offset;            // Offset from position of grabbed object to coordinates of clicked point
 
+    std::vector<menu_stack_frame> menu_stack;
+
     gui(sprite_sheet & sprites);
 
     // API for determining clicked status
     bool is_pressed(int id) const;
     bool is_focused(int id) const;
     bool is_child_pressed(int id) const;
+    bool is_child_focused(int id) const;
     void set_pressed(int id);
     void clear_pressed();
-    void begin_childen(int id);
+    void begin_children(int id);
     void end_children();
 
     bool is_cursor_over(const rect & r) const;
@@ -125,6 +129,13 @@ rect tabbed_frame(gui & g, rect r, const std::string & caption);
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset);
 std::pair<rect, rect> hsplitter(gui & g, int id, const rect & r, int & split);
 std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split);
+
+// Menu support
+void begin_menu(gui & g, int id, const rect & r);
+void begin_popup(gui & g, int id, const std::string & caption);
+bool menu_item(gui & g, const std::string & caption);
+void end_popup(gui & g);
+void end_menu(gui & g);
 
 // 3D camera interactions
 void do_mouselook(gui & g, float sensitivity);

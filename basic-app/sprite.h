@@ -12,9 +12,8 @@ using namespace linalg::aliases;
 
 struct sprite
 {
-    int2 dims;
-    float s0, t0, s1, t1;
-    std::shared_ptr<const uint8_t> pixels;
+    std::shared_ptr<const uint8_t> pixels; int2 dims; // The bitmap of per-pixel alpha values
+    float s0, t0, s1, t1;                             // The subrect of this sprite within the texture atlas
 };
 
 class sprite_sheet
@@ -23,6 +22,8 @@ class sprite_sheet
     std::vector<uint8_t> tex_pixels;
     int2 tex_dims;
 public:
+    sprite_sheet();
+
     const sprite & get_sprite(size_t index) const { return sprites[index]; }
     const void * get_texture_data() const { return tex_pixels.data(); }
     const int2 & get_texture_dims() const { return tex_dims; }

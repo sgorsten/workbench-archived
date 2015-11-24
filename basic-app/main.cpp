@@ -87,7 +87,7 @@ void object_list_ui(gui & g, int id, rect r, std::vector<scene_object> & objects
     r = tabbed_frame(g, r, "Object List");
 
     auto panel = vscroll_panel(g, id, r, objects.size()*30+20, offset);
-    g.begin_childen(id);
+    g.begin_children(id);
     g.begin_scissor(panel);
     int y0 = panel.y0 + 4 - offset;
     for(auto & obj : objects)
@@ -119,7 +119,7 @@ void object_properties_ui(gui & g, int id, rect r, std::set<scene_object *> & se
     auto & obj = **selection.begin();
 
     auto panel = vscroll_panel(g, id, r, 1000, offset); // TODO: Determine correct size
-    g.begin_childen(id);
+    g.begin_children(id);
     g.begin_scissor(panel);
     int y0 = panel.y0 + 4 - offset;
 
@@ -144,7 +144,7 @@ rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, s
 
     if(!selection.empty())
     {
-        g.begin_childen(id);
+        g.begin_children(id);
         float3 com = get_center_of_mass(selection), new_com = com;
         position_gizmo(g, 1, new_com);
         if(new_com != com) for(auto obj : selection) obj->position += new_com - com;
@@ -324,11 +324,42 @@ int main(int argc, char * argv[])
         t0 = t1;
 
         g.begin_frame({w, h});
-        auto s = hsplitter(g, 1, {0, 0, w, h}, split1);
-        auto view3d = viewport_ui(g, 2, s.first, objects, selection);
-        s = vsplitter(g, 3, s.second, split2);
-        object_list_ui(g, 4, s.first, objects, selection, offset0);
-        object_properties_ui(g, 5, s.second, selection, offset1);
+
+        // Experimental support for a menu bar
+        begin_menu(g, 1, {0, 0, w, 20});
+        {
+            begin_popup(g, 1, "File");
+            {
+                begin_popup(g, 1, "New");
+                {
+                    menu_item(g, "Game");
+                    menu_item(g, "Scene");
+                    menu_item(g, "Script");
+                }
+                end_popup(g);
+
+                menu_item(g, "Open");
+                if(menu_item(g, "Quit")) glfwSetWindowShouldClose(win, 1);
+            }
+            end_popup(g);
+
+            begin_popup(g, 2, "Edit");
+            {
+                menu_item(g, "Cut");
+                menu_item(g, "Copy");
+                menu_item(g, "Paste");
+            }
+            end_popup(g);
+
+            menu_item(g, "Help");
+        }
+        end_menu(g);
+
+        auto s = hsplitter(g, 2, {0, 21, w, h}, split1);
+        auto view3d = viewport_ui(g, 3, s.first, objects, selection);
+        s = vsplitter(g, 4, s.second, split2);
+        object_list_ui(g, 5, s.first, objects, selection, offset0);
+        object_properties_ui(g, 6, s.second, selection, offset1);
         g.end_frame();
 
         switch(g.icon)

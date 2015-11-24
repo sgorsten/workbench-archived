@@ -5,6 +5,12 @@
 #include <algorithm> // For std::sort
 #include <tuple> // For std::make_tuple
 
+sprite_sheet::sprite_sheet()
+{
+    // Sprite index 0 will always be a single solid pixel, suitable for doing solid color fills
+    sprites.push_back({std::make_shared<uint8_t>(255), {1,1}});
+}
+
 size_t sprite_sheet::insert_sprite(sprite s)
 {
     const size_t index = sprites.size();
@@ -30,7 +36,6 @@ void sprite_sheet::prepare_texture()
     {
         tex_pixels.resize(tex_dims.x * tex_dims.y);
         std::fill(begin(tex_pixels), end(tex_pixels), 0);
-        tex_pixels[0] = 255;
 
         int2 used = {border, border};
         int next_line = 0;
