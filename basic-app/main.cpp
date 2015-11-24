@@ -295,6 +295,11 @@ int main(int argc, char * argv[])
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
+    GLFWcursor * arrow_cursor = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+    GLFWcursor * ibeam_cursor = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
+    GLFWcursor * hresize_cursor = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+    GLFWcursor * vresize_cursor = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+
     int split1 = 1080, split2 = 358, offset0 = 0, offset1 = 0;
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
@@ -303,6 +308,7 @@ int main(int argc, char * argv[])
         g.ml_down = g.ml_up = false;
         g.codepoint = 0;
         g.pressed_key = key::none;
+        g.icon = cursor_icon::arrow;
         glfwPollEvents();
 
         int fw, fh, w, h;
@@ -320,6 +326,14 @@ int main(int argc, char * argv[])
         object_list_ui(g, 4, s.first, objects, selection, offset0);
         object_properties_ui(g, 5, s.second, selection, offset1);
         g.end_frame();
+
+        switch(g.icon)
+        {
+        case cursor_icon::arrow: glfwSetCursor(win, arrow_cursor); break;
+        case cursor_icon::ibeam: glfwSetCursor(win, ibeam_cursor); break;
+        case cursor_icon::hresize: glfwSetCursor(win, hresize_cursor); break;
+        case cursor_icon::vresize: glfwSetCursor(win, vresize_cursor); break;
+        }
 
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         glViewport(0, 0, fw, fh);

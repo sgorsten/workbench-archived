@@ -28,6 +28,7 @@ struct camera
     ray get_ray_from_pixel(const float2 & pixel, const rect & viewport) const;
 };
 
+enum class cursor_icon { arrow, ibeam, hresize, vresize };
 enum class key { none, left, right, up, down, home, end, page_up, page_down, backspace, delete_, enter, escape };
 enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
 
@@ -51,6 +52,8 @@ struct gui
     float2 cursor, delta;           // Current pixel coordinates of cursor, as well as the amount by which the cursor has moved
     float2 scroll;                  // Scroll amount in current frame
     float timestep;                 // Timestep between the last frame and this one
+
+    cursor_icon icon;
 
     std::vector<int> current_id;
     std::vector<int> pressed_id;

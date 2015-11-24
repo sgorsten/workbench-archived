@@ -269,6 +269,7 @@ void draw_shadowed_text(gui & g, int2 p, const float4 & c, const std::string & t
 
 bool edit(gui & g, int id, const rect & r, std::string & text)
 {
+    if(g.is_cursor_over(r)) g.icon = cursor_icon::ibeam;
     if(g.check_click(id, r))
     {
         g.text_cursor = g.text_mark = g.default_font.get_cursor_pos(text, g.click_offset.x - 5);
@@ -444,9 +445,8 @@ std::pair<rect, rect> hsplitter(gui & g, int id, const rect & r, int & split)
     split = std::max(split, r.x0 + 10);
 
     const rect splitbar = {r.x0 + split, r.y0, r.x0 + split + splitbar_width, r.y1};
+    if(g.is_cursor_over(splitbar)) g.icon = cursor_icon::hresize;
     g.check_click(id, splitbar);
-
-    //draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
     return {{r.x0, r.y0, splitbar.x0, r.y1}, {splitbar.x1, r.y0, r.x1, r.y1}};
 }
 
@@ -457,9 +457,8 @@ std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split)
     split = std::max(split, r.y0 + 10);
 
     const rect splitbar = {r.x0, r.y0 + split, r.x1, r.y0 + split + splitbar_width};
+    if(g.is_cursor_over(splitbar)) g.icon = cursor_icon::vresize;
     g.check_click(id, splitbar);
-
-    //draw_rect(g, splitbar, {0.5f,0.5f,0.5f,1});
     return {{r.x0, r.y0, r.x1, splitbar.y0}, {r.x0, splitbar.y1, r.x1, r.y1}};
 }
 
