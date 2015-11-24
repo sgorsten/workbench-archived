@@ -509,7 +509,11 @@ void begin_popup(gui & g, int id, const std::string & caption)
     {
         if(g.is_cursor_over(item)) draw_rect(g, item, {0.5f,0.5f,0,1});
         draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, caption);
-        if(g.check_click(id, item)) g.focused_id = g.pressed_id;
+        if(g.check_click(id, item))
+        {
+            g.focused_id = g.pressed_id;
+            f.clicked = true;
+        }
     }
     
     if(g.menu_stack.size() == 1) g.menu_stack.push_back({{item.x0, item.y1, item.x1, item.y1+4}, g.is_focused(id) || g.is_child_focused(id)});
@@ -528,11 +532,7 @@ bool menu_item(gui & g, const std::string & caption)
     {
         if(g.is_cursor_over(item)) draw_rect(g, item, {0.5f,0.5f,0,1});
         draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, caption);
-        if(g.is_cursor_over(item) && g.ml_down)
-        {
-            g.focused_id.clear();
-            return true;
-        }
+        if(g.is_cursor_over(item) && g.ml_down) return true;
     }
 
     return false;
@@ -549,12 +549,15 @@ void end_popup(gui & g)
         draw_rect(g, {r.x0+1, r.y0+1, r.x1-1, r.y1-1}, {0.2f,0.2f,0.2f,1});
     }
     g.end_overlay();
+    auto clicked = g.menu_stack.back().clicked;
     g.menu_stack.pop_back();
+    g.menu_stack.back().clicked |= clicked;
 }
 
 void end_menu(gui & g)
 {
     g.end_children();
+    if(g.ml_down && !g.menu_stack.back().clicked) g.focused_id.clear();
 }
 
 /////////////////
