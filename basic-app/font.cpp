@@ -1,7 +1,7 @@
 #include "font.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
-#include "thirdparty/stb_truetype.h"
+#include "stb_truetype.h"
 
 #include <fstream>
 #include <algorithm>

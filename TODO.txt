@@ -1,0 +1,3 @@
+Show multiple editable things that can use the translation gizmo:
+	Vertex editing
+	Shifting texcoords on a face (using plane gizmo, maybe?)
