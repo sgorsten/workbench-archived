@@ -33,6 +33,16 @@ enum class key { none, left, right, up, down, home, end, page_up, page_down, bac
 enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
 struct menu_stack_frame { rect r; bool open, clicked; };
 
+class widget_id
+{
+    std::vector<int> values;
+public:
+    bool is_equal_to(const widget_id & r, int id) const;
+    bool is_parent_of(const widget_id & r, int id) const;
+    void push(int id) { values.push_back(id); }
+    void pop() { values.pop_back(); }
+};
+
 struct gui
 {
     struct vertex { short2 position; byte4 color; float2 texcoord; };    
@@ -60,9 +70,9 @@ struct gui
 
     cursor_icon icon;
 
-    std::vector<int> current_id;
-    std::vector<int> pressed_id;
-    std::vector<int> focused_id;
+    widget_id current_id;
+    widget_id pressed_id;
+    widget_id focused_id;
 
     std::string::size_type text_cursor, text_mark;
 
@@ -77,14 +87,14 @@ struct gui
     gui(sprite_sheet & sprites);
 
     // API for determining clicked status
-    bool is_pressed(int id) const;
-    bool is_focused(int id) const;
-    bool is_child_pressed(int id) const;
-    bool is_child_focused(int id) const;
-    void set_pressed(int id);
-    void clear_pressed();
-    void begin_children(int id);
-    void end_children();
+    bool is_pressed(int id) const { return pressed_id.is_equal_to(current_id, id); }
+    bool is_focused(int id) const { return focused_id.is_equal_to(current_id, id); }
+    bool is_child_pressed(int id) const { return pressed_id.is_parent_of(current_id, id); }
+    bool is_child_focused(int id) const { return focused_id.is_parent_of(current_id, id); }
+    void set_pressed(int id) { pressed_id = current_id; pressed_id.push(id); }
+    void clear_pressed() { pressed_id = {}; }
+    void begin_children(int id) { current_id.push(id); }
+    void end_children() { current_id.pop(); }
 
     bool is_cursor_over(const rect & r) const;
     bool check_click(int id, const rect & r);

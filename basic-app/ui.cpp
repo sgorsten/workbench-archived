@@ -16,6 +16,20 @@ ray camera::get_ray_from_pixel(const float2 & pixel, const rect & viewport) cons
     return {position, p1.xyz()*p0.w - p0.xyz()*p1.w};
 }
 
+bool widget_id::is_equal_to(const widget_id & r, int id) const
+{
+    if(values.size() != r.values.size() + 1) return false;
+    for(size_t i=0; i<r.values.size(); ++i) if(values[i] != r.values[i]) return false;
+    return values.back() == id;
+}
+
+bool widget_id::is_parent_of(const widget_id & r, int id) const
+{
+    if(values.size() < r.values.size() + 2) return false;
+    for(size_t i=0; i<r.values.size(); ++i) if(values[i] != r.values[i]) return false;
+    return values[r.values.size()] == id;
+}
+
 gui::gui(sprite_sheet & sprites) : sprites(sprites), default_font(&sprites), bf(), bl(), bb(), br(), ml(), mr(), ml_down(), ml_up(), timestep(), cam({}), gizmode() 
 {
     std::vector<int> codepoints;
@@ -30,55 +44,6 @@ gui::gui(sprite_sheet & sprites) : sprites(sprites), default_font(&sprites), bf(
     gizmo_meshes[3] = make_box_geometry({-0.01f,0,0}, {0.01f,0.4f,0.4f});
     gizmo_meshes[4] = make_box_geometry({0,-0.01f,0}, {0.4f,0.01f,0.4f});
     gizmo_meshes[5] = make_box_geometry({0,0,-0.01f}, {0.4f,0.4f,0.01f});
-}
-
-bool gui::is_pressed(int id) const
-{
-    if(pressed_id.size() != current_id.size() + 1) return false;
-    for(size_t i=0; i<current_id.size(); ++i) if(pressed_id[i] != current_id[i]) return false;
-    return pressed_id.back() == id;
-}
-
-bool gui::is_focused(int id) const
-{
-    if(focused_id.size() != current_id.size() + 1) return false;
-    for(size_t i=0; i<current_id.size(); ++i) if(focused_id[i] != current_id[i]) return false;
-    return focused_id.back() == id;
-}
-
-bool gui::is_child_pressed(int id) const
-{
-    if(pressed_id.size() < current_id.size() + 2) return false;
-    for(size_t i=0; i<current_id.size(); ++i) if(pressed_id[i] != current_id[i]) return false;
-    return pressed_id[current_id.size()] == id;
-}
-
-bool gui::is_child_focused(int id) const
-{
-    if(focused_id.size() < current_id.size() + 2) return false;
-    for(size_t i=0; i<current_id.size(); ++i) if(focused_id[i] != current_id[i]) return false;
-    return focused_id[current_id.size()] == id;
-}
-
-void gui::set_pressed(int id)
-{
-    pressed_id = current_id;
-    pressed_id.push_back(id);
-}
-
-void gui::clear_pressed()
-{
-    pressed_id.clear();
-}
-
-void gui::begin_children(int id)
-{
-    current_id.push_back(id);
-}
-
-void gui::end_children()
-{
-    current_id.pop_back();
 }
 
 bool gui::is_cursor_over(const rect & r) const
@@ -557,7 +522,7 @@ void end_popup(gui & g)
 void end_menu(gui & g)
 {
     g.end_children();
-    if(g.ml_down && !g.menu_stack.back().clicked) g.focused_id.clear();
+    if(g.ml_down && !g.menu_stack.back().clicked) g.focused_id = {};
 }
 
 /////////////////
