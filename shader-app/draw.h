@@ -11,6 +11,7 @@
 #include "linalg.h"
 using namespace linalg::aliases;
 
+void set_uniform(GLuint program, const char * name, int scalar);
 void set_uniform(GLuint program, const char * name, float scalar);
 void set_uniform(GLuint program, const char * name, const float2 & vec);
 void set_uniform(GLuint program, const char * name, const float3 & vec);

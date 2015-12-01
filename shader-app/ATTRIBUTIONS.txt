@@ -1,0 +1,3 @@
+The textures in this application were obtained from https://yethiel.wordpress.com/cc0-textures/ and are assumed to be under the CC0 Public Domain license.
+
+If you are the original author of any texture used in this repository and would like to be credited, feel free to contact me and I will happily add an attribution and/or a link to your latest work.

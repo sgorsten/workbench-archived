@@ -13,18 +13,25 @@
 #include <algorithm>
 #pragma comment(lib, "opengl32.lib")
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 const char * vert_shader_source = R"(#version 330
 uniform mat4 u_viewProj; 
 uniform mat4 u_model, u_modelIT;
 layout(location = 0) in vec3 v_position; 
 layout(location = 1) in vec3 v_normal; 
-layout(location = 2) in vec2 v_texCoord; 
-out vec3 position, normal;
+layout(location = 2) in vec3 v_tangent; 
+layout(location = 3) in vec3 v_bitangent; 
+layout(location = 4) in vec2 v_texCoord; 
+out vec3 position, normal, tangent, bitangent;
 out vec2 texCoord;
 void main() 
 {
     position = (u_model * vec4(v_position,1)).xyz;
     normal = (u_modelIT * vec4(v_normal,0)).xyz;
+    tangent = (u_modelIT * vec4(v_tangent,0)).xyz;
+    bitangent = (u_modelIT * vec4(v_bitangent,0)).xyz;
     texCoord = v_texCoord;
     gl_Position = u_viewProj * vec4(position,1);
 })";
@@ -33,29 +40,33 @@ const char * frag_shader_source = R"(#version 330
 uniform vec3 u_eyePos;
 uniform vec3 u_lightDir;
 uniform sampler2D u_diffuseTex;
+uniform sampler2D u_normalTex;
 uniform vec3 u_diffuseMtl;
-in vec3 position, normal;
+in vec3 position, normal, tangent, bitangent;
 in vec2 texCoord;
 void main() 
 { 
-    vec3 normalVec = normalize(normal);
+    vec3 tsNormal = texture2D(u_normalTex, texCoord).xyz * 2 - 1;
+    vec3 normalVec = normalize(normalize(tangent) * tsNormal.x + normalize(bitangent) * tsNormal.y + normalize(normal) * tsNormal.z);
     vec3 eyeVec = normalize(u_eyePos - position);
     vec3 halfVec = normalize(normalVec + eyeVec);
 
     vec3 diffuseMtl = texture2D(u_diffuseTex, texCoord).rgb * u_diffuseMtl;
     float diffuseLight = max(dot(u_lightDir, normalVec), 0);
-    float specularLight = max(pow(dot(u_lightDir, halfVec), 128), 0);
-    gl_FragColor = vec4(diffuseMtl * (diffuseLight + 0.1f) + vec3(1,1,1) * specularLight, 1);
+    float specularLight = max(pow(dot(u_lightDir, halfVec), 1024), 0);
+    gl_FragColor = vec4(diffuseMtl * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
 })";
 
 void render_geometry(const geometry_mesh & mesh)
 {
-    for(GLuint i=0; i<3; ++i) glEnableVertexAttribArray(i);
+    for(GLuint i=0; i<5; ++i) glEnableVertexAttribArray(i);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->position);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->normal);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->texcoords);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->tangent);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->bitangent);
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->texcoords);
     glDrawElements(GL_TRIANGLES, mesh.triangles.size()*3, GL_UNSIGNED_INT, mesh.triangles.data());
-    for(GLuint i=0; i<3; ++i) glDisableVertexAttribArray(i);
+    for(GLuint i=0; i<5; ++i) glDisableVertexAttribArray(i);
 }
 
 struct scene_object
@@ -65,6 +76,27 @@ struct scene_object
     float3 position, diffuse;
 };
 
+GLuint load_texture(const char * filename)
+{
+    int x, y, comp;
+    auto image = stbi_load(filename, &x, &y, &comp, 0);
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    switch(comp)
+    {
+    case 1: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE,       GL_UNSIGNED_BYTE, image); break;
+    case 2: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, image); break;
+    case 3: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGB,             GL_UNSIGNED_BYTE, image); break;
+    case 4: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGBA,            GL_UNSIGNED_BYTE, image); break;
+    }
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    stbi_image_free(image);  
+    return tex;
+}
+
 int main(int argc, char * argv[]) try
 {
     camera cam = {};
@@ -73,11 +105,12 @@ int main(int argc, char * argv[]) try
     cam.far_clip = 16.0f;
     cam.position = {0,1.5f,4};
 
-    const auto ground = make_box_geometry({-4,-0.1f,-4}, {4,0,4});
+    auto ground = make_box_geometry({-4,-0.1f,-4}, {4,0,4});
+    generate_texcoords_cubic(ground, 0.5);
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
     std::vector<scene_object> objects = {
-        {"Ground", &ground, {0,0,0}, {1,1,1}},
+        {"Ground", &ground, {0,0,0}, {0.8,0.8,0.8}},
         {"Box", &box, {-1,0,0}, {1,0.5f,0.5f}},
         {"Cylinder", &cylinder, {0,0,0}, {0.5f,1,0.5f}},
         {"Box 2", &box, {+1,0,0}, {0.5f,0.5f,1}}
@@ -95,23 +128,8 @@ int main(int argc, char * argv[]) try
     GLuint frag_shader = compile_shader(GL_FRAGMENT_SHADER, frag_shader_source);
     GLuint program = link_program({vert_shader, frag_shader});
 
-    float image[16][16];
-    for(int i=0; i<16; ++i)
-    {
-        for(int j=0; j<16; ++j)
-        {
-            image[i][j] = ((i/4 + j/4) % 2) 
-                ? ((i+j) % 2 ? 0.8f : 0.6f)
-                : ((i+j) % 2 ? 0.2f : 0.1f);
-        }
-    }
-
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_LUMINANCE, GL_FLOAT, image);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    GLuint diffuse_tex = load_texture("pattern_191_diffuse.png");
+    GLuint normal_tex = load_texture("pattern_191_normal.png");
     
     bool ml=0, mr=0, bf=0, bl=0, bb=0, br=0;
     double t0 = glfwGetTime();
@@ -172,19 +190,23 @@ int main(int argc, char * argv[]) try
         glViewport(0, 0, fw, fh);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        glActiveTexture(GL_TEXTURE0 + 0);
+        glBindTexture(GL_TEXTURE_2D, diffuse_tex);
+        glActiveTexture(GL_TEXTURE0 + 1);
+        glBindTexture(GL_TEXTURE_2D, normal_tex);
+
         glUseProgram(program);
         set_uniform(program, "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
         set_uniform(program, "u_eyePos", cam.position);
         set_uniform(program, "u_lightDir", normalize(float3(0.2f,1,0.1f)));
 
         glEnable(GL_DEPTH_TEST);
-
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, tex);
         glEnable(GL_CULL_FACE);
         for(auto & obj : objects)
         {   
             const float4x4 model = translation_matrix(obj.position);
+            set_uniform(program, "u_diffuseTex", 0);
+            set_uniform(program, "u_normalTex", 1);
             set_uniform(program, "u_model", model);
             set_uniform(program, "u_modelIT", inverse(transpose(model)));
             set_uniform(program, "u_diffuseMtl", obj.diffuse);

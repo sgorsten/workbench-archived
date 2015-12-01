@@ -48,6 +48,26 @@ bool intersect_ray_mesh(const ray & ray, const geometry_mesh & mesh, float * hit
 }
 
 // Procedural geometry
+void compute_tangents(geometry_mesh & mesh)
+{
+    for(geometry_vertex & v : mesh.vertices) v.tangent = v.bitangent = float3();
+    for(int3 & t : mesh.triangles)
+    {
+        geometry_vertex & v0 = mesh.vertices[t.x], & v1 = mesh.vertices[t.y], & v2 = mesh.vertices[t.z];
+        const float3 e1 = v1.position - v0.position, e2 = v2.position - v0.position;
+        const float2 d1 = v1.texcoords - v0.texcoords, d2 = v2.texcoords - v0.texcoords;
+        const float3 dpds = float3(d2.y * e1.x - d1.y * e2.x, d2.y * e1.y - d1.y * e2.y, d2.y * e1.z - d1.y * e2.z) / cross(d1, d2);
+        const float3 dpdt = float3(d1.x * e2.x - d2.x * e1.x, d1.x * e2.y - d2.x * e1.y, d1.x * e2.z - d2.x * e1.z) / cross(d1, d2);
+        v0.tangent += dpds; v1.tangent += dpds; v2.tangent += dpds;
+        v0.bitangent += dpdt; v1.bitangent += dpdt; v2.bitangent += dpdt;
+    }
+    for(geometry_vertex & v : mesh.vertices)
+    {
+        v.tangent = normalize(v.tangent);
+        v.bitangent = normalize(v.bitangent);
+    }
+}
+
 geometry_mesh make_box_geometry(const float3 & min_bounds, const float3 & max_bounds)
 {
     const auto a = min_bounds, b = max_bounds;
@@ -79,6 +99,7 @@ geometry_mesh make_box_geometry(const float3 & min_bounds, const float3 & max_bo
         {{a.x, b.y, b.z}, {0,0,+1}, {0,1}},
     };
     mesh.triangles = {{0,1,2}, {0,2,3}, {4,5,6}, {4,6,7}, {8,9,10}, {8,10,11}, {12,13,14}, {12,14,15}, {16,17,18}, {16,18,19}, {20,21,22}, {20,22,23}};
+    compute_tangents(mesh);
     return mesh;
 }
 
@@ -113,6 +134,8 @@ geometry_mesh make_cylinder_geometry(const float3 & axis, const float3 & arm1, c
         mesh.triangles.push_back({base, base+i*2-2, base+i*2});
         mesh.triangles.push_back({base+1, base+i*2+1, base+i*2-1});
     }
+
+    compute_tangents(mesh);
     return mesh;
 }
 
@@ -140,4 +163,23 @@ geometry_mesh make_lathed_geometry(const float3 & axis, const float3 & arm1, con
         }
     }
     return mesh;
+}
+
+void generate_texcoords_cubic(geometry_mesh & mesh, float scale)
+{
+    for(auto & vert : mesh.vertices)
+    {
+        if(std::abs(vert.normal.x) > std::abs(vert.normal.y) && std::abs(vert.normal.x) > std::abs(vert.normal.z))
+        {
+            vert.texcoords = float2(vert.position.y, vert.position.z) * scale;
+        }
+        else if(std::abs(vert.normal.y) > std::abs(vert.normal.z))
+        {
+            vert.texcoords = float2(vert.position.z, vert.position.x) * scale;
+        }
+        else
+        {
+            vert.texcoords = float2(vert.position.x, vert.position.y) * scale;
+        }
+    }
 }

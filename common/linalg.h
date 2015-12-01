@@ -82,6 +82,7 @@ namespace linalg
     template<class T, int N> vec<T,N> & operator *= (vec<T,N> & a, T b) { return a *= b; }
     template<class T, int N> vec<T,N> & operator /= (vec<T,N> & a, T b) { return a /= b; }
 
+    template<class T>        T        cross     (const vec<T,2> & a, const vec<T,2> & b)      { return a.x*b.y-a.y*b.x; }
     template<class T>        vec<T,3> cross     (const vec<T,3> & a, const vec<T,3> & b)      { return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x}; }
     template<class T>        T        dot       (const vec<T,2> & a, const vec<T,2> & b)      { return a.x*b.x + a.y*b.y; }
     template<class T>        T        dot       (const vec<T,3> & a, const vec<T,3> & b)      { return a.x*b.x + a.y*b.y + a.z*b.z; }

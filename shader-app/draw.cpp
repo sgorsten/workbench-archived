@@ -5,6 +5,7 @@
 
 #include <string>
 
+void set_uniform(GLuint program, const char * name, int scalar) { glUniform1i(glGetUniformLocation(program, name), scalar); }
 void set_uniform(GLuint program, const char * name, float scalar) { glUniform1f(glGetUniformLocation(program, name), scalar); }
 void set_uniform(GLuint program, const char * name, const float2 & vec) { glUniform2fv(glGetUniformLocation(program, name), 1, &vec.x); }
 void set_uniform(GLuint program, const char * name, const float3 & vec) { glUniform3fv(glGetUniformLocation(program, name), 1, &vec.x); }

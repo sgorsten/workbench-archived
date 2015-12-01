@@ -20,7 +20,7 @@ inline float4x4 perspective_matrix(float fovy, float aspect, float n, float f)  
 
 // Shape data types
 struct ray { float3 origin, direction; };
-struct geometry_vertex { float3 position, normal; float2 texcoords; };
+struct geometry_vertex { float3 position, normal; float2 texcoords; float3 tangent, bitangent; };
 struct geometry_mesh { std::vector<geometry_vertex> vertices; std::vector<int3> triangles; };
 
 // Shape intersection routines
@@ -31,5 +31,7 @@ bool intersect_ray_mesh(const ray & ray, const geometry_mesh & mesh, float * hit
 geometry_mesh make_box_geometry(const float3 & min_bounds, const float3 & max_bounds);
 geometry_mesh make_cylinder_geometry(const float3 & axis, const float3 & arm1, const float3 & arm2, int slices);
 geometry_mesh make_lathed_geometry(const float3 & axis, const float3 & arm1, const float3 & arm2, int slices, std::initializer_list<float2> points);
+
+void generate_texcoords_cubic(geometry_mesh & mesh, float scale);
 
 #endif
