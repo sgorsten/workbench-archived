@@ -6,11 +6,13 @@
     <ClInclude Include="geometry.h" />
     <ClInclude Include="linalg.h" />
     <ClInclude Include="sprite.h" />
+    <ClInclude Include="input.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="font.cpp" />
     <ClCompile Include="geometry.cpp" />
     <ClCompile Include="sprite.cpp" />
     <ClCompile Include="ui.cpp" />
+    <ClCompile Include="input.cpp" />
   </ItemGroup>
 </Project>

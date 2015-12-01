@@ -1,9 +1,8 @@
 // This is free and unencumbered software released into the public domain.
 // For more information, please refer to <http://unlicense.org>
 
-#include <cstdlib>
-#include <GL\glew.h>
-
+#include "draw.h"
+#include "input.h"
 #include "ui.h"
 
 #include <cassert>
@@ -11,7 +10,6 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
-#include <GLFW\glfw3.h>
 #pragma comment(lib, "opengl32.lib")
 
 const char * vert_shader_source = R"(#version 330
@@ -59,58 +57,9 @@ struct scene_object
     float3 position, diffuse;
 };
 
-camera cam;
-bool ml, mr, bf, bl, bb, br;
-float2 cursor, delta;
-
-void set_uniform(GLuint program, const char * name, float scalar) { glUniform1f(glGetUniformLocation(program, name), scalar); }
-void set_uniform(GLuint program, const char * name, const float2 & vec) { glUniform2fv(glGetUniformLocation(program, name), 1, &vec.x); }
-void set_uniform(GLuint program, const char * name, const float3 & vec) { glUniform3fv(glGetUniformLocation(program, name), 1, &vec.x); }
-void set_uniform(GLuint program, const char * name, const float4 & vec) { glUniform4fv(glGetUniformLocation(program, name), 1, &vec.x); }
-void set_uniform(GLuint program, const char * name, const float4x4 & mat) { glUniformMatrix4fv(glGetUniformLocation(program, name), 1, GL_FALSE, &mat.x.x); }
-
-GLuint compile_shader(GLenum type, const char * source)
-{
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    GLint status, length;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-    if(status == GL_FALSE)
-    {
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-        std::string log(length-1, ' ');
-        glGetShaderInfoLog(shader, length, nullptr, &log[0]);
-        glDeleteShader(shader);
-        throw std::runtime_error("GLSL compile error: " + log);
-    }
-
-    return shader;
-}
-
-GLuint link_program(std::initializer_list<GLuint> shaders)
-{
-    GLuint program = glCreateProgram();
-    for(auto shader : shaders) glAttachShader(program, shader);
-    glLinkProgram(program);
-
-    GLint status, length;
-    glGetProgramiv(program, GL_LINK_STATUS, &status);
-    if(status == GL_FALSE)
-    {
-        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-        std::string log(length-1, ' ');
-        glGetProgramInfoLog(program, length, nullptr, &log[0]);
-        glDeleteProgram(program);
-        throw std::runtime_error("GLSL link error: " + log);
-    }
-
-    return program;
-}
-
 int main(int argc, char * argv[]) try
 {
+    camera cam = {};
     cam.yfov = 1.0f;
     cam.near_clip = 0.1f;
     cam.far_clip = 16.0f;
@@ -126,31 +75,8 @@ int main(int argc, char * argv[]) try
     
     glfwInit();
     auto win = glfwCreateWindow(1280, 720, "Shader App", nullptr, nullptr);
-    glfwSetKeyCallback(win, [](GLFWwindow * win, int key, int scancode, int action, int mods)
-    {
-        switch(key)
-        {
-        case GLFW_KEY_W: bf = action != GLFW_RELEASE; break;
-        case GLFW_KEY_A: bl = action != GLFW_RELEASE; break;
-        case GLFW_KEY_S: bb = action != GLFW_RELEASE; break;
-        case GLFW_KEY_D: br = action != GLFW_RELEASE; break;
-        }
-    });
-    glfwSetMouseButtonCallback(win, [](GLFWwindow * win, int button, int action, int mods)
-    {
-        switch(button)
-        {
-        case GLFW_MOUSE_BUTTON_LEFT: ml = action != GLFW_RELEASE; break;
-        case GLFW_MOUSE_BUTTON_RIGHT: mr = action != GLFW_RELEASE; break;
-        }
-    });
-    glfwSetCursorPosCallback(win, [](GLFWwindow * win, double x, double y)
-    {
-        const float2 new_cursor = float2(double2(x,y));
-        delta = new_cursor - cursor;
-        cursor = new_cursor;
-    });
-
+    std::vector<input_event> events;
+    install_input_callbacks(win, events);
     glfwMakeContextCurrent(win);
 
     glewInit();
@@ -176,17 +102,42 @@ int main(int argc, char * argv[]) try
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_LUMINANCE, GL_FLOAT, image);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-    int split1 = 1080, split2 = 358, offset0 = 0, offset1 = 0;
+    
+    float2 cursor;
+    bool ml=0, mr=0, bf=0, bl=0, bb=0, br=0;
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
-        delta = {0,0};
+        events.clear();
         glfwPollEvents();
-
-        int fw, fh, w, h;
-        glfwGetFramebufferSize(win, &fw, &fh);
-        glfwGetWindowSize(win, &w, &h);
+        for(const auto & e : events) switch(e.type)
+        {
+        case input_event::KEY_DOWN: case input_event::KEY_UP:            
+            switch(e.key)
+            {
+            case GLFW_KEY_W: bf = e.type == input_event::KEY_DOWN; break;
+            case GLFW_KEY_A: bl = e.type == input_event::KEY_DOWN; break;
+            case GLFW_KEY_S: bb = e.type == input_event::KEY_DOWN; break;
+            case GLFW_KEY_D: br = e.type == input_event::KEY_DOWN; break;
+            }
+            break;
+        case input_event::MOUSE_DOWN: case input_event::MOUSE_UP:
+            switch(e.button)
+            {
+            case GLFW_MOUSE_BUTTON_LEFT: ml = e.type == input_event::MOUSE_DOWN; break;
+            case GLFW_MOUSE_BUTTON_RIGHT: mr = e.type == input_event::MOUSE_DOWN; break;
+            }
+            break;
+        case input_event::CURSOR_MOTION:
+            if(mr)
+            {
+                const auto delta = e.cursor - cursor;
+                cam.yaw -= delta.x * 0.01f;
+                cam.pitch -= delta.y * 0.01f;
+            }
+            cursor = e.cursor;
+            break;
+        }
 
         const double t1 = glfwGetTime();
         const float timestep = static_cast<float>(t1-t0);
@@ -194,9 +145,6 @@ int main(int argc, char * argv[]) try
 
         if(mr)
         {
-            cam.yaw -= delta.x * 0.01f;
-            cam.pitch -= delta.y * 0.01f;
-
             const float4 orientation = cam.get_orientation();
             float3 move;
             if(bf) move -= qzdir(orientation);
@@ -206,9 +154,9 @@ int main(int argc, char * argv[]) try
             if(mag2(move) > 0) cam.position += normalize(move) * (timestep * 8);
         }
 
-        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        int fw, fh;
+        glfwGetFramebufferSize(win, &fw, &fh);
         glViewport(0, 0, fw, fh);
-        glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(program);
@@ -227,8 +175,6 @@ int main(int argc, char * argv[]) try
             set_uniform(program, "u_modelIT", inverse(transpose(model)));
             render_geometry(*obj.mesh);
         }
-
-        glPopAttrib();
 
         glfwSwapBuffers(win);
     }
