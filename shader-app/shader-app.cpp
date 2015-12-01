@@ -47,7 +47,7 @@ in vec2 texCoord;
 void main() 
 { 
     vec3 tsNormal = texture2D(u_normalTex, texCoord).xyz * 2 - 1;
-    vec3 normalVec = normalize(normalize(tangent) * tsNormal.x + normalize(bitangent) * tsNormal.y + normalize(normal) * tsNormal.z);
+    vec3 normalVec = normalize(normalize(tangent) * tsNormal.x + normalize(bitangent) * -tsNormal.y + normalize(normal) * tsNormal.z);
     vec3 eyeVec = normalize(u_eyePos - position);
     vec3 halfVec = normalize(normalVec + eyeVec);
 
