@@ -6,8 +6,7 @@
 
 #include "geometry.h"
 #include "font.h"
-
-#include <GLFW\glfw3.h> // For GLFW_KEY_* and GLFW_MOD_*
+#include "input.h"
 
 struct rect 
 { 
@@ -60,12 +59,8 @@ struct gui
     geometry_mesh gizmo_meshes[6];
 
     int2 window_size;               // Size in pixels of the current window
-    int mods, key_down;
     bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
-    bool ml_down, ml_up;            // Whether the left mouse was pressed or released during this frame
-    unsigned int codepoint;         // Codepoint of unicode character typed during this frame
-    float2 cursor, delta;           // Current pixel coordinates of cursor, as well as the amount by which the cursor has moved
-    float2 scroll;                  // Scroll amount in current frame
+    input_event in;
     float timestep;                 // Timestep between the last frame and this one
 
     cursor_icon icon;
@@ -86,8 +81,8 @@ struct gui
 
     gui(sprite_sheet & sprites);
 
-    bool is_control_held() const { return (mods & GLFW_MOD_CONTROL) != 0; }
-    bool is_shift_held() const { return (mods & GLFW_MOD_SHIFT) != 0; }
+    bool is_control_held() const { return (in.mods & GLFW_MOD_CONTROL) != 0; }
+    bool is_shift_held() const { return (in.mods & GLFW_MOD_SHIFT) != 0; }
 
     // API for determining clicked status
     bool is_pressed(int id) const { return pressed_id.is_equal_to(current_id, id); }
@@ -116,7 +111,7 @@ struct gui
     float4x4 get_view_matrix() const { return cam.get_view_matrix(); }
     float4x4 get_projection_matrix() const { return cam.get_projection_matrix(viewport3d); }
     float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix(viewport3d); }
-    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(cursor, viewport3d); }
+    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(in.cursor, viewport3d); }
 };
 
 // Basic 2D gui output

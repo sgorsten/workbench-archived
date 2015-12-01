@@ -170,8 +170,8 @@ rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, s
 
     if(g.mr)
     {
-        g.cam.yaw -= g.delta.x * 0.01f;
-        g.cam.pitch -= g.delta.y * 0.01f;
+        g.cam.yaw -= g.in.motion.x * 0.01f;
+        g.cam.pitch -= g.in.motion.y * 0.01f;
 
         const float4 orientation = g.cam.get_orientation();
         float3 move;
@@ -229,41 +229,8 @@ int main(int argc, char * argv[])
     
     glfwInit();
     auto win = glfwCreateWindow(1280, 720, "Basic Workbench App", nullptr, nullptr);
-    glfwSetWindowUserPointer(win, &g);
-    glfwSetCharCallback(win, [](GLFWwindow * win, unsigned int codepoint) { reinterpret_cast<gui *>(glfwGetWindowUserPointer(win))->codepoint = codepoint; });
-    glfwSetScrollCallback(win, [](GLFWwindow * win, double x, double y) { reinterpret_cast<gui *>(glfwGetWindowUserPointer(win))->scroll = float2(double2(x,y)); });
-    glfwSetKeyCallback(win, [](GLFWwindow * win, int key, int scancode, int action, int mods)
-    {
-        auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
-        g->mods = mods;
-        switch(key)
-        {
-        case GLFW_KEY_W: g->bf = action != GLFW_RELEASE; break;
-        case GLFW_KEY_A: g->bl = action != GLFW_RELEASE; break;
-        case GLFW_KEY_S: g->bb = action != GLFW_RELEASE; break;
-        case GLFW_KEY_D: g->br = action != GLFW_RELEASE; break;
-        }
-        if(action == GLFW_RELEASE) return;
-        g->key_down = key;
-    });
-    glfwSetMouseButtonCallback(win, [](GLFWwindow * win, int button, int action, int mods)
-    {
-        auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
-        g->mods = mods;
-        switch(button)
-        {
-        case GLFW_MOUSE_BUTTON_LEFT: g->ml = action != GLFW_RELEASE; (g->ml ? g->ml_down : g->ml_up) = true; break;
-        case GLFW_MOUSE_BUTTON_RIGHT: g->mr = action != GLFW_RELEASE; break;
-        }
-    });
-    glfwSetCursorPosCallback(win, [](GLFWwindow * win, double x, double y)
-    {
-        auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
-        const float2 cursor = float2(double2(x,y));
-        g->delta = cursor - g->cursor;
-        g->cursor = cursor;
-    });
-
+    std::vector<input_event> events;
+    install_input_callbacks(win, events);
     glfwMakeContextCurrent(win);
 
     float image[16][16];
@@ -300,12 +267,33 @@ int main(int argc, char * argv[])
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
-        g.scroll = g.delta = {0,0};
-        g.ml_down = g.ml_up = false;
-        g.codepoint = 0;
-        g.key_down = 0;
         g.icon = cursor_icon::arrow;
         glfwPollEvents();
+        if(events.empty()) g.in = get_empty_event(win);
+        else
+        {
+            g.in = events.front();
+            events.erase(begin(events));
+        }
+        switch(g.in.type)
+        {
+        case input::key_down: case input::key_up:
+            switch(g.in.key)
+            {
+            case GLFW_KEY_W: g.bf = g.in.is_down(); break;
+            case GLFW_KEY_A: g.bl = g.in.is_down(); break;
+            case GLFW_KEY_S: g.bb = g.in.is_down(); break;
+            case GLFW_KEY_D: g.br = g.in.is_down(); break;
+            }
+            break;
+        case input::mouse_down: case input::mouse_up:               
+            switch(g.in.button)
+            {
+            case GLFW_MOUSE_BUTTON_LEFT: g.ml = g.in.is_down(); break;
+            case GLFW_MOUSE_BUTTON_RIGHT: g.mr = g.in.is_down(); break;
+            }
+            break;
+        }
 
         int fw, fh, w, h;
         glfwGetFramebufferSize(win, &fw, &fh);

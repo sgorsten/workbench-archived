@@ -7,15 +7,10 @@ struct input_buffer
     int mods;
 };
 
-static void push_event(GLFWwindow * window, const input_event & event) 
-{ 
-    auto buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(window));
-    buffer->events.push_back(event); 
-}
-
-static float2 get_cursor_pos(GLFWwindow * window)
-{ 
-
+input_event get_empty_event(GLFWwindow * window)
+{
+    auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(window));
+    return {input::cursor_motion, buffer->cursor, buffer->mods};
 }
 
 void install_input_callbacks(GLFWwindow * window, std::vector<input_event> & events)

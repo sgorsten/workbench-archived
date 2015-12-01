@@ -28,5 +28,6 @@ struct input_event
 
 void install_input_callbacks(GLFWwindow * window, std::vector<input_event> & events);
 void uninstall_input_callbacks(GLFWwindow * window);
+input_event get_empty_event(GLFWwindow * window);
 
 #endif
