@@ -478,8 +478,8 @@ void begin_popup(gui & g, int id, const std::string & caption)
         }
     }
     
-    if(g.menu_stack.size() == 1) g.menu_stack.push_back({{item.x0, item.y1, item.x0+300, item.y1+4}, g.is_focused(id) || g.is_child_focused(id)});
-    else g.menu_stack.push_back({{item.x1, item.y0-1, item.x1+300, item.y0+3}, g.is_focused(id) || g.is_child_focused(id)});
+    if(g.menu_stack.size() == 1) g.menu_stack.push_back({{item.x0, item.y1, item.x0+200, item.y1+4}, g.is_focused(id) || g.is_child_focused(id)});
+    else g.menu_stack.push_back({{item.x1, item.y0-1, item.x1+200, item.y0+3}, g.is_focused(id) || g.is_child_focused(id)});
     g.begin_overlay();
     g.begin_overlay();
     g.begin_children(id);
@@ -496,6 +496,54 @@ bool menu_item(gui & g, const std::string & caption, int mods, int key)
     {
         if(g.is_cursor_over(item)) draw_rect(g, item, {0.5f,0.5f,0,1});
         draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, caption);
+
+        if(key)
+        {
+            std::ostringstream ss;
+            if(mods & GLFW_MOD_CONTROL) ss << "Ctrl+";
+            if(mods & GLFW_MOD_SHIFT) ss << "Shift+";
+            if(mods & GLFW_MOD_ALT) ss << "Alt+";
+            if(mods & GLFW_MOD_SUPER) ss << "Super+";
+            if(key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ss << (char)('A' + key - GLFW_KEY_A);
+            else if(key >= GLFW_KEY_0 && key <= GLFW_KEY_9) ss << (key - GLFW_KEY_0);
+            else if(key >= GLFW_KEY_F1 && key <= GLFW_KEY_F25) ss << 'F' << (1 + key - GLFW_KEY_F1);
+            else switch(key)
+            {
+            case GLFW_KEY_SPACE:            ss << "Space";       break;
+            case GLFW_KEY_APOSTROPHE:       ss << '\'';          break;
+            case GLFW_KEY_COMMA:            ss << ',';           break;
+            case GLFW_KEY_MINUS:            ss << '-';           break;
+            case GLFW_KEY_PERIOD:           ss << '.';           break;
+            case GLFW_KEY_SLASH:            ss << '/';           break;
+            case GLFW_KEY_SEMICOLON:        ss << ';';           break;
+            case GLFW_KEY_EQUAL:            ss << '=';           break;
+            case GLFW_KEY_LEFT_BRACKET:     ss << '[';           break;
+            case GLFW_KEY_BACKSLASH:        ss << '\\';          break;
+            case GLFW_KEY_RIGHT_BRACKET:    ss << ']';           break;
+            case GLFW_KEY_GRAVE_ACCENT:     ss << '`';           break;
+            case GLFW_KEY_ESCAPE:           ss << "Escape";      break;
+            case GLFW_KEY_ENTER:            ss << "Enter";       break;
+            case GLFW_KEY_TAB:              ss << "Tab";         break;
+            case GLFW_KEY_BACKSPACE:        ss << "Backspace";   break;
+            case GLFW_KEY_INSERT:           ss << "Insert";      break;
+            case GLFW_KEY_DELETE:           ss << "Delete";      break;
+            case GLFW_KEY_RIGHT:            ss << "Right";       break;
+            case GLFW_KEY_LEFT:             ss << "Left";        break;
+            case GLFW_KEY_DOWN:             ss << "Down";        break;
+            case GLFW_KEY_UP:               ss << "Up";          break;
+            case GLFW_KEY_PAGE_UP:          ss << "PageUp";      break;
+            case GLFW_KEY_PAGE_DOWN:        ss << "PageDown";    break;
+            case GLFW_KEY_HOME:             ss << "Home";        break;
+            case GLFW_KEY_END:              ss << "End";         break;
+            case GLFW_KEY_CAPS_LOCK:        ss << "CapsLock";    break;
+            case GLFW_KEY_SCROLL_LOCK:      ss << "ScrollLock";  break;
+            case GLFW_KEY_NUM_LOCK:         ss << "NumLock";     break;
+            case GLFW_KEY_PRINT_SCREEN:     ss << "PrintScreen"; break;
+            case GLFW_KEY_PAUSE:            ss << "Pause";       break;
+            default: throw std::logic_error("unsupported hotkey");
+            }
+            draw_shadowed_text(g, {item.x0 + 100, item.y0}, {1,1,1,1}, ss.str());
+        }
         if(g.is_cursor_over(item) && g.in.type == input::mouse_down && g.in.button == GLFW_MOUSE_BUTTON_LEFT) return true;
     }
 

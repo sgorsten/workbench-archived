@@ -315,20 +315,34 @@ int main(int argc, char * argv[])
                 }
                 end_popup(g);
 
-                menu_item(g, "Open");
+                menu_item(g, "Open", GLFW_MOD_CONTROL, GLFW_KEY_O);
+                menu_item(g, "Save", GLFW_MOD_CONTROL, GLFW_KEY_S);
                 if(menu_item(g, "Quit", GLFW_MOD_CONTROL, GLFW_KEY_Q)) glfwSetWindowShouldClose(win, 1);
             }
             end_popup(g);
 
             begin_popup(g, 2, "Edit");
             {
-                menu_item(g, "Cut");
-                menu_item(g, "Copy");
-                menu_item(g, "Paste");
+                menu_item(g, "Undo", GLFW_MOD_CONTROL, GLFW_KEY_Z);
+                menu_item(g, "Redo", GLFW_MOD_CONTROL, GLFW_KEY_Y);
+
+                menu_item(g, "Cut", GLFW_MOD_CONTROL, GLFW_KEY_X);
+                menu_item(g, "Copy", GLFW_MOD_CONTROL, GLFW_KEY_C);
+                menu_item(g, "Paste", GLFW_MOD_CONTROL, GLFW_KEY_V);
+
+                if(menu_item(g, "Select All", GLFW_MOD_CONTROL, GLFW_KEY_A))
+                {
+                    selection.clear();
+                    for(auto & obj : objects) selection.insert(&obj);
+                }
             }
             end_popup(g);
 
-            menu_item(g, "Help");
+            begin_popup(g, 3, "Help");
+            {
+                menu_item(g, "View Help", GLFW_MOD_CONTROL, GLFW_KEY_F1);
+            }
+            end_popup(g);
         }
         end_menu(g);
 
