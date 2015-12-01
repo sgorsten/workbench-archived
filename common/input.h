@@ -10,7 +10,7 @@ using namespace linalg::aliases;
 #include <vector>
 #include <GLFW\glfw3.h>
 
-enum class input { cursor_motion, key_down, key_repeat, key_up, mouse_down, mouse_up, scroll, character };
+enum class input { none, cursor_motion, key_down, key_repeat, key_up, mouse_down, mouse_up, scroll, character };
 struct input_event
 {
     input    type;      // Which input occurred during this event?
@@ -27,7 +27,7 @@ struct input_event
 };
 
 void install_input_callbacks(GLFWwindow * window, std::vector<input_event> & events);
+void emit_empty_event(GLFWwindow * window);
 void uninstall_input_callbacks(GLFWwindow * window);
-input_event get_empty_event(GLFWwindow * window);
 
 #endif

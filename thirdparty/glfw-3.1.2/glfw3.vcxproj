@@ -35,6 +35,7 @@
   <ItemGroup>
     <ClInclude Include="include\GLFW\glfw3.h" />
     <ClInclude Include="include\GLFW\glfw3native.h" />
+    <ClInclude Include="src\glfw_config.h" />
     <ClInclude Include="src\internal.h" />
     <ClInclude Include="src\wgl_context.h" />
     <ClInclude Include="src\win32_platform.h" />

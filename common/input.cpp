@@ -7,12 +7,6 @@ struct input_buffer
     int mods;
 };
 
-input_event get_empty_event(GLFWwindow * window)
-{
-    auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(window));
-    return {input::cursor_motion, buffer->cursor, buffer->mods};
-}
-
 void install_input_callbacks(GLFWwindow * window, std::vector<input_event> & events)
 {
     double2 cursor;
@@ -56,6 +50,12 @@ void install_input_callbacks(GLFWwindow * window, std::vector<input_event> & eve
         auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(win));
         buffer->events.push_back({input::character, buffer->cursor, buffer->mods, {0,0}, 0, 0, {0,0}, codepoint});
     });
+}
+
+void emit_empty_event(GLFWwindow * window)
+{
+    auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(window));
+    buffer->events.push_back({input::none, buffer->cursor, buffer->mods});
 }
 
 void uninstall_input_callbacks(GLFWwindow * window)

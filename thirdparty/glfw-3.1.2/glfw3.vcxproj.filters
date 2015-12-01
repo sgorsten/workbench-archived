@@ -68,5 +68,8 @@
     <ClInclude Include="include\GLFW\glfw3native.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="src\glfw_config.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

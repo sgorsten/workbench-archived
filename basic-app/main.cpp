@@ -269,12 +269,9 @@ int main(int argc, char * argv[])
     {
         g.icon = cursor_icon::arrow;
         glfwPollEvents();
-        if(events.empty()) g.in = get_empty_event(win);
-        else
-        {
-            g.in = events.front();
-            events.erase(begin(events));
-        }
+        if(events.empty()) emit_empty_event(win);
+        g.in = events.front();
+        events.erase(begin(events));
         switch(g.in.type)
         {
         case input::key_down: case input::key_up:

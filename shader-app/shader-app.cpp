@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <thread>
 #include <algorithm>
 #pragma comment(lib, "opengl32.lib")
 
@@ -29,15 +30,22 @@ void main()
 })";
 
 const char * frag_shader_source = R"(#version 330
+uniform vec3 u_eyePos;
 uniform vec3 u_lightDir;
-uniform sampler2D u_diffuse;
+uniform sampler2D u_diffuseTex;
+uniform vec3 u_diffuseMtl;
 in vec3 position, normal;
 in vec2 texCoord;
 void main() 
 { 
-    vec4 diffuseMtl = texture2D(u_diffuse, texCoord);
-    float diffuseLight = max(dot(normal, u_lightDir), 0);
-    gl_FragColor = diffuseMtl * diffuseLight;
+    vec3 normalVec = normalize(normal);
+    vec3 eyeVec = normalize(u_eyePos - position);
+    vec3 halfVec = normalize(normalVec + eyeVec);
+
+    vec3 diffuseMtl = texture2D(u_diffuseTex, texCoord).rgb * u_diffuseMtl;
+    float diffuseLight = max(dot(u_lightDir, normalVec), 0);
+    float specularLight = max(pow(dot(u_lightDir, halfVec), 128), 0);
+    gl_FragColor = vec4(diffuseMtl * (diffuseLight + 0.1f) + vec3(1,1,1) * specularLight, 1);
 })";
 
 void render_geometry(const geometry_mesh & mesh)
@@ -65,9 +73,11 @@ int main(int argc, char * argv[]) try
     cam.far_clip = 16.0f;
     cam.position = {0,1.5f,4};
 
+    const auto ground = make_box_geometry({-4,-0.1f,-4}, {4,0,4});
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
     std::vector<scene_object> objects = {
+        {"Ground", &ground, {0,0,0}, {1,1,1}},
         {"Box", &box, {-1,0,0}, {1,0.5f,0.5f}},
         {"Cylinder", &cylinder, {0,0,0}, {0.5f,1,0.5f}},
         {"Box 2", &box, {+1,0,0}, {0.5f,0.5f,1}}
@@ -107,8 +117,17 @@ int main(int argc, char * argv[]) try
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
-        events.clear();
         glfwPollEvents();
+
+        const double t1 = glfwGetTime();
+        const float timestep = static_cast<float>(t1-t0);
+        if(timestep < 1.0f/60)
+        {
+            std::this_thread::sleep_for(std::chrono::microseconds(static_cast<long long>(1000000 * (1.0f/60 - timestep))));
+            continue;
+        }
+        t0 = t1;
+
         for(const auto & e : events) switch(e.type)
         {
         case input::key_down: case input::key_up:            
@@ -135,10 +154,7 @@ int main(int argc, char * argv[]) try
             }
             break;
         }
-
-        const double t1 = glfwGetTime();
-        const float timestep = static_cast<float>(t1-t0);
-        t0 = t1;
+        events.clear();
 
         if(mr)
         {
@@ -157,8 +173,9 @@ int main(int argc, char * argv[]) try
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(program);
-        set_uniform(program, "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));    
-        set_uniform(program, "u_lightDir", normalize(float3(0.3f,1,0.2f)));
+        set_uniform(program, "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
+        set_uniform(program, "u_eyePos", cam.position);
+        set_uniform(program, "u_lightDir", normalize(float3(0.2f,1,0.1f)));
 
         glEnable(GL_DEPTH_TEST);
 
@@ -170,6 +187,7 @@ int main(int argc, char * argv[]) try
             const float4x4 model = translation_matrix(obj.position);
             set_uniform(program, "u_model", model);
             set_uniform(program, "u_modelIT", inverse(transpose(model)));
+            set_uniform(program, "u_diffuseMtl", obj.diffuse);
             render_geometry(*obj.mesh);
         }
 
