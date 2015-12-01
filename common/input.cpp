@@ -1,69 +1,78 @@
 #include "input.h"
 
+struct input_buffer
+{
+    std::vector<input_event> & events;
+    float2 cursor;
+    int mods;
+};
+
 static void push_event(GLFWwindow * window, const input_event & event) 
 { 
-    auto events = reinterpret_cast<std::vector<input_event> *>(glfwGetWindowUserPointer(window));
-    events->push_back(event); 
+    auto buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(window));
+    buffer->events.push_back(event); 
 }
 
 static float2 get_cursor_pos(GLFWwindow * window)
 { 
-    double2 p;
-    glfwGetCursorPos(window, &p.x, &p.y);
-    return float2(p); 
-}
 
-static int get_mods(GLFWwindow * window)
-{
-    int mods;
-    if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT  ) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT  )) mods |= GLFW_MOD_SHIFT;
-    if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL)) mods |= GLFW_MOD_CONTROL;
-    if(glfwGetKey(window, GLFW_KEY_LEFT_ALT    ) || glfwGetKey(window, GLFW_KEY_RIGHT_ALT    )) mods |= GLFW_MOD_ALT;
-    if(glfwGetKey(window, GLFW_KEY_LEFT_SUPER  ) || glfwGetKey(window, GLFW_KEY_RIGHT_SUPER  )) mods |= GLFW_MOD_SUPER;
-    return mods;
 }
 
 void install_input_callbacks(GLFWwindow * window, std::vector<input_event> & events)
 {
-    glfwSetWindowUserPointer(window, &events);
+    double2 cursor;
+    glfwGetCursorPos(window, &cursor.x, &cursor.y);
+    glfwSetWindowUserPointer(window, new input_buffer{events, float2(cursor), 0});
     glfwSetCursorPosCallback(window, [](GLFWwindow * win, double x, double y)
     {
-        push_event(win, {input_event::CURSOR_MOTION, float2(double2(x,y)), get_mods(win), 0, 0, {0,0}, 0});
+        auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(win));
+        const float2 cursor(double2(x,y));
+        buffer->events.push_back({input::cursor_motion, cursor, buffer->mods, cursor - buffer->cursor, 0, 0, {0,0}, 0});
+        buffer->cursor = cursor;
     });
     glfwSetKeyCallback(window, [](GLFWwindow * win, int key, int scancode, int action, int mods)
     {
-        input_event e = {};
+        auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(win));
         switch(action)
         {
-        case GLFW_PRESS: push_event(win, {input_event::KEY_DOWN, get_cursor_pos(win), mods, key, 0, {0,0}, 0}); break;
-        case GLFW_REPEAT: push_event(win, {input_event::KEY_REPEAT, get_cursor_pos(win), mods, key, 0, {0,0}, 0}); break;
-        case GLFW_RELEASE: push_event(win, {input_event::KEY_UP, get_cursor_pos(win), mods, key, 0, {0,0}, 0}); break;
+        case GLFW_PRESS: buffer->events.push_back({input::key_down, buffer->cursor, mods, {0,0}, key, 0, {0,0}, 0}); break;
+        case GLFW_REPEAT: buffer->events.push_back({input::key_repeat, buffer->cursor, mods, {0,0}, key, 0, {0,0}, 0}); break;
+        case GLFW_RELEASE: buffer->events.push_back({input::key_up, buffer->cursor, mods, {0,0}, key, 0, {0,0}, 0}); break;
         }
+        buffer->mods = mods;
     });
     glfwSetMouseButtonCallback(window, [](GLFWwindow * win, int button, int action, int mods)
     {
+        auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(win));
         switch(action)
         {
-        case GLFW_PRESS: push_event(win, {input_event::MOUSE_DOWN, get_cursor_pos(win), mods, 0, button, {0,0}, 0}); break;
-        case GLFW_RELEASE: push_event(win, {input_event::MOUSE_UP, get_cursor_pos(win), mods, 0, button, {0,0}, 0}); break;
+        case GLFW_PRESS: buffer->events.push_back({input::mouse_down, buffer->cursor, mods, {0,0}, 0, button, {0,0}, 0}); break;
+        case GLFW_RELEASE: buffer->events.push_back({input::mouse_up, buffer->cursor, mods, {0,0}, 0, button, {0,0}, 0}); break;
         }
+        buffer->mods = mods;
     });
     glfwSetScrollCallback(window, [](GLFWwindow * win, double x, double y)
     {
-        push_event(win, {input_event::SCROLL, get_cursor_pos(win), get_mods(win), 0, 0, float2(double2(x,y)), 0});
+        auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(win));
+        buffer->events.push_back({input::scroll, buffer->cursor, buffer->mods, {0,0}, 0, 0, float2(double2(x,y)), 0});
     });
     glfwSetCharCallback(window, [](GLFWwindow * win, unsigned codepoint)
     {
-        push_event(win, {input_event::CHARACTER, get_cursor_pos(win), get_mods(win), 0, 0, {0,0}, codepoint});
+        auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(win));
+        buffer->events.push_back({input::character, buffer->cursor, buffer->mods, {0,0}, 0, 0, {0,0}, codepoint});
     });
 }
 
 void uninstall_input_callbacks(GLFWwindow * window)
 {
-    glfwSetWindowUserPointer(window, nullptr);
-    glfwSetCursorPosCallback(window, nullptr);
-    glfwSetKeyCallback(window, nullptr);
-    glfwSetMouseButtonCallback(window, nullptr);
-    glfwSetScrollCallback(window, nullptr);
-    glfwSetCharCallback(window, nullptr);
+    if(auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(window)))
+    {
+        glfwSetCursorPosCallback(window, nullptr);
+        glfwSetKeyCallback(window, nullptr);
+        glfwSetMouseButtonCallback(window, nullptr);
+        glfwSetScrollCallback(window, nullptr);
+        glfwSetCharCallback(window, nullptr);
+        glfwSetWindowUserPointer(window, nullptr);
+        delete buffer;
+    }
 }

@@ -10,15 +10,20 @@ using namespace linalg::aliases;
 #include <vector>
 #include <GLFW\glfw3.h>
 
+enum class input { cursor_motion, key_down, key_repeat, key_up, mouse_down, mouse_up, scroll, character };
 struct input_event
 {
-    enum { CURSOR_MOTION, KEY_DOWN, KEY_REPEAT, KEY_UP, MOUSE_DOWN, MOUSE_UP, SCROLL, CHARACTER } type;
-    float2 cursor;      // The cursor location, specified in pixels, relative to the top left corner of the window
-    int mods;           // Mod flags in play during the current event
-    int key;            // Which key was pressed during KEY_DOWN events, held during KEY_REPEAT events, or released during KEY_UP events
-    int button;         // Which mouse button was pressed during MOUSE_DOWN events, or released during MOUSE_UP events
-    float2 scroll;      // The amount of scrolling which occurred during SCROLL events
-    unsigned codepoint; // The unicode codepoint of the character typed during CHARACTER events
+    input    type;      // Which input occurred during this event?
+    float2   cursor;    // The cursor location, specified in pixels, relative to the top left corner of the window
+    int      mods;      // Mod flags in play during the current event
+    float2   motion;    // The amount the cursor has moved, in pixels, during input::cursor_motion
+    int      key;       // Which key was pressed during input::key_down, held during input::key_repeat, or released during input::key_up
+    int      button;    // Which mouse button was pressed during input::mouse_down, or released during input::mouse_up
+    float2   scroll;    // The amount of scrolling which occurred during input::scroll
+    unsigned codepoint; // The unicode codepoint of the character typed during input::character
+
+    bool is_down() const { return type == input::key_down || type == input::key_repeat || type == input::mouse_down; }
+    bool is_up() const { return type == input::key_up || type == input::mouse_up; }
 };
 
 void install_input_callbacks(GLFWwindow * window, std::vector<input_event> & events);

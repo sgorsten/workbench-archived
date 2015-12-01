@@ -103,7 +103,6 @@ int main(int argc, char * argv[]) try
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     
-    float2 cursor;
     bool ml=0, mr=0, bf=0, bl=0, bb=0, br=0;
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
@@ -112,30 +111,28 @@ int main(int argc, char * argv[]) try
         glfwPollEvents();
         for(const auto & e : events) switch(e.type)
         {
-        case input_event::KEY_DOWN: case input_event::KEY_UP:            
+        case input::key_down: case input::key_up:            
             switch(e.key)
             {
-            case GLFW_KEY_W: bf = e.type == input_event::KEY_DOWN; break;
-            case GLFW_KEY_A: bl = e.type == input_event::KEY_DOWN; break;
-            case GLFW_KEY_S: bb = e.type == input_event::KEY_DOWN; break;
-            case GLFW_KEY_D: br = e.type == input_event::KEY_DOWN; break;
+            case GLFW_KEY_W: bf = e.is_down(); break;
+            case GLFW_KEY_A: bl = e.is_down(); break;
+            case GLFW_KEY_S: bb = e.is_down(); break;
+            case GLFW_KEY_D: br = e.is_down(); break;
             }
             break;
-        case input_event::MOUSE_DOWN: case input_event::MOUSE_UP:
+        case input::mouse_down: case input::mouse_up:
             switch(e.button)
             {
-            case GLFW_MOUSE_BUTTON_LEFT: ml = e.type == input_event::MOUSE_DOWN; break;
-            case GLFW_MOUSE_BUTTON_RIGHT: mr = e.type == input_event::MOUSE_DOWN; break;
+            case GLFW_MOUSE_BUTTON_LEFT: ml = e.is_down(); break;
+            case GLFW_MOUSE_BUTTON_RIGHT: mr = e.is_down(); break;
             }
             break;
-        case input_event::CURSOR_MOTION:
+        case input::cursor_motion:
             if(mr)
             {
-                const auto delta = e.cursor - cursor;
-                cam.yaw -= delta.x * 0.01f;
-                cam.pitch -= delta.y * 0.01f;
+                cam.yaw -= e.motion.x * 0.01f;
+                cam.pitch -= e.motion.y * 0.01f;
             }
-            cursor = e.cursor;
             break;
         }
 
