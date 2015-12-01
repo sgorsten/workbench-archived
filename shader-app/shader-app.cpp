@@ -1,28 +1,55 @@
 // This is free and unencumbered software released into the public domain.
 // For more information, please refer to <http://unlicense.org>
 
+#include <cstdlib>
+#include <GL\glew.h>
+
 #include "ui.h"
 
 #include <cassert>
-#include <cstdlib>
-#include <set>
+
+#include <iostream>
 #include <sstream>
 #include <algorithm>
 #include <GLFW\glfw3.h>
 #pragma comment(lib, "opengl32.lib")
 
-void gl_load_matrix(const float4x4 & m) { glLoadMatrixf(&m.x.x); }
-void gl_color(const float3 & v) { glColor3fv(begin(v)); }
+const char * vert_shader_source = R"(#version 330
+uniform mat4 u_viewProj; 
+uniform mat4 u_model, u_modelIT;
+layout(location = 0) in vec3 v_position; 
+layout(location = 1) in vec3 v_normal; 
+layout(location = 2) in vec2 v_texCoord; 
+out vec3 position, normal;
+out vec2 texCoord;
+void main() 
+{
+    position = (u_model * vec4(v_position,1)).xyz;
+    normal = (u_modelIT * vec4(v_normal,0)).xyz;
+    texCoord = v_texCoord;
+    gl_Position = u_viewProj * vec4(position,1);
+})";
+
+const char * frag_shader_source = R"(#version 330
+uniform vec3 u_lightDir;
+uniform sampler2D u_diffuse;
+in vec3 position, normal;
+in vec2 texCoord;
+void main() 
+{ 
+    vec4 diffuseMtl = texture2D(u_diffuse, texCoord);
+    float diffuseLight = max(dot(normal, u_lightDir), 0);
+    gl_FragColor = diffuseMtl * diffuseLight;
+})";
 
 void render_geometry(const geometry_mesh & mesh)
 {
-    const GLenum states[] = {GL_VERTEX_ARRAY, GL_NORMAL_ARRAY, GL_TEXTURE_COORD_ARRAY};
-    for(auto s : states) glEnableClientState(s);
-    glVertexPointer(3, GL_FLOAT, sizeof(geometry_vertex), &mesh.vertices.data()->position);
-    glNormalPointer(GL_FLOAT, sizeof(geometry_vertex), &mesh.vertices.data()->normal);
-    glTexCoordPointer(2, GL_FLOAT, sizeof(geometry_vertex), &mesh.vertices.data()->texcoords);
+    for(GLuint i=0; i<3; ++i) glEnableVertexAttribArray(i);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->position);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->normal);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->texcoords);
     glDrawElements(GL_TRIANGLES, mesh.triangles.size()*3, GL_UNSIGNED_INT, mesh.triangles.data());
-    for(auto s : states) glDisableClientState(s);
+    for(GLuint i=0; i<3; ++i) glDisableVertexAttribArray(i);
 }
 
 struct scene_object
@@ -36,7 +63,53 @@ camera cam;
 bool ml, mr, bf, bl, bb, br;
 float2 cursor, delta;
 
-int main(int argc, char * argv[])
+void set_uniform(GLuint program, const char * name, float scalar) { glUniform1f(glGetUniformLocation(program, name), scalar); }
+void set_uniform(GLuint program, const char * name, const float2 & vec) { glUniform2fv(glGetUniformLocation(program, name), 1, &vec.x); }
+void set_uniform(GLuint program, const char * name, const float3 & vec) { glUniform3fv(glGetUniformLocation(program, name), 1, &vec.x); }
+void set_uniform(GLuint program, const char * name, const float4 & vec) { glUniform4fv(glGetUniformLocation(program, name), 1, &vec.x); }
+void set_uniform(GLuint program, const char * name, const float4x4 & mat) { glUniformMatrix4fv(glGetUniformLocation(program, name), 1, GL_FALSE, &mat.x.x); }
+
+GLuint compile_shader(GLenum type, const char * source)
+{
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, nullptr);
+    glCompileShader(shader);
+
+    GLint status, length;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+    if(status == GL_FALSE)
+    {
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+        std::string log(length-1, ' ');
+        glGetShaderInfoLog(shader, length, nullptr, &log[0]);
+        glDeleteShader(shader);
+        throw std::runtime_error("GLSL compile error: " + log);
+    }
+
+    return shader;
+}
+
+GLuint link_program(std::initializer_list<GLuint> shaders)
+{
+    GLuint program = glCreateProgram();
+    for(auto shader : shaders) glAttachShader(program, shader);
+    glLinkProgram(program);
+
+    GLint status, length;
+    glGetProgramiv(program, GL_LINK_STATUS, &status);
+    if(status == GL_FALSE)
+    {
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+        std::string log(length-1, ' ');
+        glGetProgramInfoLog(program, length, nullptr, &log[0]);
+        glDeleteProgram(program);
+        throw std::runtime_error("GLSL link error: " + log);
+    }
+
+    return program;
+}
+
+int main(int argc, char * argv[]) try
 {
     cam.yfov = 1.0f;
     cam.near_clip = 0.1f;
@@ -50,7 +123,6 @@ int main(int argc, char * argv[])
         {"Cylinder", &cylinder, {0,0,0}, {0.5f,1,0.5f}},
         {"Box 2", &box, {+1,0,0}, {0.5f,0.5f,1}}
     };
-    std::set<scene_object *> selection;
     
     glfwInit();
     auto win = glfwCreateWindow(1280, 720, "Shader App", nullptr, nullptr);
@@ -80,6 +152,12 @@ int main(int argc, char * argv[])
     });
 
     glfwMakeContextCurrent(win);
+
+    glewInit();
+
+    GLuint vert_shader = compile_shader(GL_VERTEX_SHADER, vert_shader_source);
+    GLuint frag_shader = compile_shader(GL_FRAGMENT_SHADER, frag_shader_source);
+    GLuint program = link_program({vert_shader, frag_shader});
 
     float image[16][16];
     for(int i=0; i<16; ++i)
@@ -133,24 +211,21 @@ int main(int argc, char * argv[])
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glMatrixMode(GL_PROJECTION);
-        gl_load_matrix(cam.get_projection_matrix({0, 0, fw, fh}));
+        glUseProgram(program);
+        set_uniform(program, "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));    
+        set_uniform(program, "u_lightDir", normalize(float3(0.3f,1,0.2f)));
 
-        glMatrixMode(GL_MODELVIEW);
-        gl_load_matrix(cam.get_view_matrix());
         glEnable(GL_DEPTH_TEST);
 
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, tex);
-        glEnable(GL_LIGHTING);
-        glEnable(GL_LIGHT0);
-        glLightfv(GL_LIGHT0, GL_POSITION, begin(normalize(float4(0.1f, 0.9f, 0.3f, 0))));
-        glEnable(GL_COLOR_MATERIAL);
         glEnable(GL_CULL_FACE);
         for(auto & obj : objects)
-        {            
-            gl_load_matrix(cam.get_view_matrix() * translation_matrix(obj.position));
-            gl_color(obj.diffuse); render_geometry(*obj.mesh);
+        {   
+            const float4x4 model = translation_matrix(obj.position);
+            set_uniform(program, "u_model", model);
+            set_uniform(program, "u_modelIT", inverse(transpose(model)));
+            render_geometry(*obj.mesh);
         }
 
         glPopAttrib();
@@ -159,4 +234,9 @@ int main(int argc, char * argv[])
     }
     glfwTerminate();
     return EXIT_SUCCESS;
+}
+catch(const std::exception & e)
+{
+    std::cerr << e.what() << std::endl;
+    return EXIT_FAILURE;
 }

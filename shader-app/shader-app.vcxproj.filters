@@ -3,4 +3,7 @@
   <ItemGroup>
     <ClCompile Include="shader-app.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
 </Project>

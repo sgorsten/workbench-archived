@@ -111,6 +111,7 @@ namespace linalg
                             mat()                           : x(), y() {}
                             mat(C x, C y)                   : x(x), y(y) {}
         explicit            mat(T s)                        : x(s), y(s) {}
+        vec<T,2>            row(int i) const                { return {x[i], y[i]}; }
         const T &           operator() (int i, int j) const { return (&x)[j][i]; }
         T &                 operator() (int i, int j)       { return (&x)[j][i]; }
     };
@@ -121,6 +122,7 @@ namespace linalg
                             mat()                           : x(), y(), z() {}
                             mat(C x, C y, C z)              : x(x), y(y), z(z) {}
         explicit            mat(T s)                        : x(s), y(s), z(s) {}
+        vec<T,3>            row(int i) const                { return {x[i], y[i], z[i]}; }
         const T &           operator() (int i, int j) const { return (&x)[j][i]; }
         T &                 operator() (int i, int j)       { return (&x)[j][i]; }
     };
@@ -131,6 +133,7 @@ namespace linalg
                             mat()                           : x(), y(), z(), w() {}
                             mat(C x, C y, C z, C w)         : x(x), y(y), z(z), w(w) {}
         explicit            mat(T s)                        : x(s), y(s), z(s), w(s) {}
+        vec<T,4>            row(int i) const                { return {x[i], y[i], z[i], w[i]}; }
         const T &           operator() (int i, int j) const { return (&x)[j][i]; }
         T &                 operator() (int i, int j)       { return (&x)[j][i]; }
     };
@@ -174,7 +177,9 @@ namespace linalg
                                                                  + a.x.z*(a.y.w*a.z.x*a.w.y + a.w.w*a.y.x*a.z.y + a.z.w*a.w.x*a.y.y - a.y.w*a.w.x*a.z.y - a.z.w*a.y.x*a.w.y - a.w.w*a.z.x*a.y.y)
                                                                  + a.x.w*(a.y.x*a.w.y*a.z.z + a.z.x*a.y.y*a.w.z + a.w.x*a.z.y*a.y.z - a.y.x*a.z.y*a.w.z - a.w.x*a.y.y*a.z.z - a.z.x*a.w.y*a.y.z); }
     template<class T, int N> mat<T,N,N> inverse(const mat<T,N,N> & a) { return adjugate(a)*(1/determinant(a)); }
-
+    template<class T, int M> mat<T,M,2> transpose(const mat<T,2,M> & m) { return {m.row(0), m.row(1)}; }
+    template<class T, int M> mat<T,M,3> transpose(const mat<T,3,M> & m) { return {m.row(0), m.row(1), m.row(2)}; }
+    template<class T, int M> mat<T,M,4> transpose(const mat<T,4,M> & m) { return {m.row(0), m.row(1), m.row(2), m.row(3)}; }
 
     namespace aliases
     {
