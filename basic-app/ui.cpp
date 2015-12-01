@@ -69,7 +69,7 @@ bool gui::check_pressed(int id)
 {
     if(is_pressed(id))
     {
-        if(ml_up) clear_pressed();
+        if(ml_up) pressed_id = {};
         else return true;
     }
     return false;
@@ -79,7 +79,7 @@ bool gui::check_release(int id)
 {
     if(ml_up && is_pressed(id))
     {
-        clear_pressed();
+        pressed_id = {};
         return true;
     }
     return false;
@@ -272,58 +272,55 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
             changed = true;
         }
 
-        if(g.pressed_key != key::none)
+        switch(g.key_down)
         {
-            switch(g.pressed_key)
+        case GLFW_KEY_LEFT:
+            if(g.text_cursor > 0) --g.text_cursor;
+            if(!g.is_shift_held()) g.text_mark = g.text_cursor;
+            break;
+        case GLFW_KEY_RIGHT:
+            if(g.text_cursor < text.size()) ++g.text_cursor;
+            if(!g.is_shift_held()) g.text_mark = g.text_cursor;
+            break;
+        case GLFW_KEY_HOME:
+            g.text_cursor = 0;
+            if(!g.is_shift_held()) g.text_mark = g.text_cursor;
+            break;
+        case GLFW_KEY_END:
+            g.text_cursor = text.size();
+            if(!g.is_shift_held()) g.text_mark = g.text_cursor;
+            break;
+        case GLFW_KEY_BACKSPACE: 
+            if(g.text_cursor != g.text_mark)
             {
-            case key::left:
-                if(g.text_cursor > 0) --g.text_cursor;
-                if(!g.shift) g.text_mark = g.text_cursor;
-                break;
-            case key::right:
-                if(g.text_cursor < text.size()) ++g.text_cursor;
-                if(!g.shift) g.text_mark = g.text_cursor;
-                break;
-            case key::home:
-                g.text_cursor = 0;
-                if(!g.shift) g.text_mark = g.text_cursor;
-                break;
-            case key::end:
-                g.text_cursor = text.size();
-                if(!g.shift) g.text_mark = g.text_cursor;
-                break;
-            case key::backspace: 
-                if(g.text_cursor != g.text_mark)
-                {
-                    auto lo = std::min(g.text_cursor, g.text_mark);
-                    auto hi = std::max(g.text_cursor, g.text_mark);
-                    text.erase(begin(text)+lo, begin(text)+hi);
-                    g.text_cursor = g.text_mark = lo;
-                    changed = true;
-                }
-                else if(g.text_cursor > 0)
-                {
-                    text.erase(begin(text) + --g.text_cursor); 
-                    g.text_mark = g.text_cursor;
-                    changed = true;
-                }
-                break;
-            case key::delete_: 
-                if(g.text_cursor != g.text_mark)
-                {
-                    auto lo = std::min(g.text_cursor, g.text_mark);
-                    auto hi = std::max(g.text_cursor, g.text_mark);
-                    text.erase(begin(text)+lo, begin(text)+hi);
-                    g.text_cursor = g.text_mark = lo;   
-                    changed = true;
-                }
-                if(g.text_cursor < text.size())
-                {
-                    text.erase(begin(text) + g.text_cursor);
-                    changed = true;
-                }
-                break;
+                auto lo = std::min(g.text_cursor, g.text_mark);
+                auto hi = std::max(g.text_cursor, g.text_mark);
+                text.erase(begin(text)+lo, begin(text)+hi);
+                g.text_cursor = g.text_mark = lo;
+                changed = true;
             }
+            else if(g.text_cursor > 0)
+            {
+                text.erase(begin(text) + --g.text_cursor); 
+                g.text_mark = g.text_cursor;
+                changed = true;
+            }
+            break;
+        case GLFW_KEY_DELETE: 
+            if(g.text_cursor != g.text_mark)
+            {
+                auto lo = std::min(g.text_cursor, g.text_mark);
+                auto hi = std::max(g.text_cursor, g.text_mark);
+                text.erase(begin(text)+lo, begin(text)+hi);
+                g.text_cursor = g.text_mark = lo;   
+                changed = true;
+            }
+            if(g.text_cursor < text.size())
+            {
+                text.erase(begin(text) + g.text_cursor);
+                changed = true;
+            }
+            break;
         }
     }
     
@@ -481,15 +478,17 @@ void begin_popup(gui & g, int id, const std::string & caption)
         }
     }
     
-    if(g.menu_stack.size() == 1) g.menu_stack.push_back({{item.x0, item.y1, item.x1, item.y1+4}, g.is_focused(id) || g.is_child_focused(id)});
-    else g.menu_stack.push_back({{item.x1, item.y0-1, item.x1, item.y0+3}, g.is_focused(id) || g.is_child_focused(id)});
+    if(g.menu_stack.size() == 1) g.menu_stack.push_back({{item.x0, item.y1, item.x0+300, item.y1+4}, g.is_focused(id) || g.is_child_focused(id)});
+    else g.menu_stack.push_back({{item.x1, item.y0-1, item.x1+300, item.y0+3}, g.is_focused(id) || g.is_child_focused(id)});
     g.begin_overlay();
     g.begin_overlay();
     g.begin_children(id);
 }
 
-bool menu_item(gui & g, const std::string & caption)
+bool menu_item(gui & g, const std::string & caption, int mods, int key)
 {
+    if(key && (mods & g.mods) == mods && key == g.key_down) return true;
+
     auto & f = g.menu_stack.back();
     const rect item = get_next_menu_item_rect(g, f.r, caption);
 
@@ -528,23 +527,6 @@ void end_menu(gui & g)
 /////////////////
 // 3D controls //
 /////////////////
-
-void do_mouselook(gui & g, float sensitivity)
-{
-    g.cam.yaw -= g.delta.x * sensitivity;
-    g.cam.pitch -= g.delta.y * sensitivity;
-}
-
-void move_wasd(gui & g, float speed)
-{
-    const float4 orientation = g.cam.get_orientation();
-    float3 move;
-    if(g.bf) move -= qzdir(orientation);
-    if(g.bl) move -= qxdir(orientation);
-    if(g.bb) move += qzdir(orientation);
-    if(g.br) move += qxdir(orientation);
-    if(mag2(move) > 0) g.cam.position += normalize(move) * (speed * g.timestep);
-}
 
 void plane_translation_dragger(gui & g, const float3 & plane_normal, float3 & point)
 {

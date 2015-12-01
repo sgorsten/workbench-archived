@@ -7,6 +7,8 @@
 #include "geometry.h"
 #include "font.h"
 
+#include <GLFW\glfw3.h> // For GLFW_KEY_* and GLFW_MOD_*
+
 struct rect 
 { 
     int x0, y0, x1, y1; 
@@ -29,7 +31,6 @@ struct camera
 };
 
 enum class cursor_icon { arrow, ibeam, hresize, vresize };
-enum class key { none, left, right, up, down, home, end, page_up, page_down, backspace, delete_, enter, escape };
 enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
 struct menu_stack_frame { rect r; bool open, clicked; };
 
@@ -59,11 +60,10 @@ struct gui
     geometry_mesh gizmo_meshes[6];
 
     int2 window_size;               // Size in pixels of the current window
-    bool ctrl, shift;               // Whether at least one control or shift key is being held down
+    int mods, key_down;
     bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
     bool ml_down, ml_up;            // Whether the left mouse was pressed or released during this frame
     unsigned int codepoint;         // Codepoint of unicode character typed during this frame
-    key pressed_key;                // Special key pressed during this frame
     float2 cursor, delta;           // Current pixel coordinates of cursor, as well as the amount by which the cursor has moved
     float2 scroll;                  // Scroll amount in current frame
     float timestep;                 // Timestep between the last frame and this one
@@ -86,20 +86,22 @@ struct gui
 
     gui(sprite_sheet & sprites);
 
+    bool is_control_held() const { return (mods & GLFW_MOD_CONTROL) != 0; }
+    bool is_shift_held() const { return (mods & GLFW_MOD_SHIFT) != 0; }
+
     // API for determining clicked status
     bool is_pressed(int id) const { return pressed_id.is_equal_to(current_id, id); }
     bool is_focused(int id) const { return focused_id.is_equal_to(current_id, id); }
     bool is_child_pressed(int id) const { return pressed_id.is_parent_of(current_id, id); }
     bool is_child_focused(int id) const { return focused_id.is_parent_of(current_id, id); }
     void set_pressed(int id) { pressed_id = current_id; pressed_id.push(id); }
-    void clear_pressed() { pressed_id = {}; }
     void begin_children(int id) { current_id.push(id); }
     void end_children() { current_id.pop(); }
 
     bool is_cursor_over(const rect & r) const;
-    bool check_click(int id, const rect & r);
+    bool check_click(int id, const rect & r); // Returns true if the item was clicked during this frame
     bool check_pressed(int id); // Returns true if the item with the specified ID was clicked and has not yet been released
-    bool check_release(int id);
+    bool check_release(int id); // Returns true if the item with the specified ID was released during this frame
 
     // API for rendering 2D glyphs
     void begin_frame(const int2 & window_size);
@@ -143,13 +145,9 @@ std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split);
 // Menu support
 void begin_menu(gui & g, int id, const rect & r);
 void begin_popup(gui & g, int id, const std::string & caption);
-bool menu_item(gui & g, const std::string & caption);
+bool menu_item(gui & g, const std::string & caption, int mods=0, int key=0);
 void end_popup(gui & g);
 void end_menu(gui & g);
-
-// 3D camera interactions
-void do_mouselook(gui & g, float sensitivity);
-void move_wasd(gui & g, float speed);
 
 // 3D manipulation interactions
 void plane_translation_dragger(gui & g, const float3 & plane_normal, float3 & point);

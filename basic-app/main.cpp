@@ -95,7 +95,7 @@ void object_list_ui(gui & g, int id, rect r, std::vector<scene_object> & objects
         const rect list_entry = {panel.x0 + 4, y0, panel.x1 - 4, y0 + g.default_font.line_height};
         if(g.check_click(&obj - objects.data(), list_entry))
         {
-            if(!g.ctrl) selection.clear();
+            if(!g.is_control_held()) selection.clear();
             auto it = selection.find(&obj);
             if(it == end(selection)) selection.insert(&obj);
             else selection.erase(it);
@@ -154,9 +154,9 @@ rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, s
 
     if(g.check_click(id, r))
     {
-        if(!selection.empty() && g.gizmode == gizmo_mode::none && !g.ctrl) selection.clear();
+        if(!selection.empty() && g.gizmode == gizmo_mode::none && !g.is_control_held()) selection.clear();
 
-        if(selection.empty() || g.ctrl)
+        if(selection.empty() || g.is_control_held())
         {
             if(auto picked_object = raycast(g.get_ray_from_cursor(), objects))
             {
@@ -170,8 +170,16 @@ rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, s
 
     if(g.mr)
     {
-        do_mouselook(g, 0.01f);
-        move_wasd(g, 8.0f);
+        g.cam.yaw -= g.delta.x * 0.01f;
+        g.cam.pitch -= g.delta.y * 0.01f;
+
+        const float4 orientation = g.cam.get_orientation();
+        float3 move;
+        if(g.bf) move -= qzdir(orientation);
+        if(g.bl) move -= qxdir(orientation);
+        if(g.bb) move += qzdir(orientation);
+        if(g.br) move += qxdir(orientation);
+        if(mag2(move) > 0) g.cam.position += normalize(move) * (g.timestep * 8);
     }
     return r;
 }
@@ -227,8 +235,7 @@ int main(int argc, char * argv[])
     glfwSetKeyCallback(win, [](GLFWwindow * win, int key, int scancode, int action, int mods)
     {
         auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
-        g->ctrl = (mods & GLFW_MOD_CONTROL) != 0;
-        g->shift = (mods & GLFW_MOD_SHIFT) != 0;
+        g->mods = mods;
         switch(key)
         {
         case GLFW_KEY_W: g->bf = action != GLFW_RELEASE; break;
@@ -237,27 +244,12 @@ int main(int argc, char * argv[])
         case GLFW_KEY_D: g->br = action != GLFW_RELEASE; break;
         }
         if(action == GLFW_RELEASE) return;
-        switch(key)
-        {
-        case GLFW_KEY_LEFT: g->pressed_key = ::key::left; break;
-        case GLFW_KEY_RIGHT: g->pressed_key = ::key::right; break;
-        case GLFW_KEY_UP: g->pressed_key = ::key::up; break;
-        case GLFW_KEY_DOWN: g->pressed_key = ::key::down; break;
-        case GLFW_KEY_HOME: g->pressed_key = ::key::home; break;
-        case GLFW_KEY_END: g->pressed_key = ::key::end; break;
-        case GLFW_KEY_PAGE_UP: g->pressed_key = ::key::page_up; break;
-        case GLFW_KEY_PAGE_DOWN: g->pressed_key = ::key::page_down; break;
-        case GLFW_KEY_BACKSPACE: g->pressed_key = ::key::backspace; break;
-        case GLFW_KEY_DELETE: g->pressed_key = ::key::delete_; break;
-        case GLFW_KEY_ENTER: g->pressed_key = ::key::enter; break;
-        case GLFW_KEY_ESCAPE: g->pressed_key = ::key::escape; break;       
-        }
+        g->key_down = key;
     });
     glfwSetMouseButtonCallback(win, [](GLFWwindow * win, int button, int action, int mods)
     {
         auto * g = reinterpret_cast<gui *>(glfwGetWindowUserPointer(win));
-        g->ctrl = (mods & GLFW_MOD_CONTROL) != 0;
-        g->shift = (mods & GLFW_MOD_SHIFT) != 0;
+        g->mods = mods;
         switch(button)
         {
         case GLFW_MOUSE_BUTTON_LEFT: g->ml = action != GLFW_RELEASE; (g->ml ? g->ml_down : g->ml_up) = true; break;
@@ -311,7 +303,7 @@ int main(int argc, char * argv[])
         g.scroll = g.delta = {0,0};
         g.ml_down = g.ml_up = false;
         g.codepoint = 0;
-        g.pressed_key = key::none;
+        g.key_down = 0;
         g.icon = cursor_icon::arrow;
         glfwPollEvents();
 
@@ -339,7 +331,7 @@ int main(int argc, char * argv[])
                 end_popup(g);
 
                 menu_item(g, "Open");
-                if(menu_item(g, "Quit")) glfwSetWindowShouldClose(win, 1);
+                if(menu_item(g, "Quit", GLFW_MOD_CONTROL, GLFW_KEY_Q)) glfwSetWindowShouldClose(win, 1);
             }
             end_popup(g);
 
