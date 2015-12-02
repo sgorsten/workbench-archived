@@ -120,14 +120,19 @@ int main(int argc, char * argv[]) try
     generate_texcoords_cubic(ground, 0.5);
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
-   
-    glfwInit();
-    auto win = glfwCreateWindow(1280, 720, "Shader App", nullptr, nullptr);
+
+    opengl_context gl;
+    GLuint vert_shader = gl.compile_shader(GL_VERTEX_SHADER, vert_shader_source);
+    GLuint frag_shader = gl.compile_shader(GL_FRAGMENT_SHADER, frag_shader_source);
+    GLuint program = gl.link_program({vert_shader, frag_shader});
+
+    GLuint diffuse_tex = gl.load_texture("pattern_191_diffuse.png");
+    GLuint normal_tex = gl.load_texture("pattern_191_normal.png");
+
+    auto win = gl.create_window({1280, 720}, "Shader App");
     std::vector<input_event> events;
     install_input_callbacks(win, events);
     glfwMakeContextCurrent(win);
-
-    glewInit();
 
     const auto g_ground = make_draw_mesh(ground);
     const auto g_box = make_draw_mesh(box);
@@ -140,15 +145,8 @@ int main(int argc, char * argv[]) try
         {"Box 2", &box, &g_box, {+1,0,0}, {0.5f,0.5f,1}}
     };
 
-    GLuint vert_shader = compile_shader(GL_VERTEX_SHADER, vert_shader_source);
-    GLuint frag_shader = compile_shader(GL_FRAGMENT_SHADER, frag_shader_source);
-    GLuint program = link_program({vert_shader, frag_shader});
-
     auto per_scene = get_uniform_block_description(program, "PerScene");
     auto per_object = get_uniform_block_description(program, "PerObject");
-
-    GLuint diffuse_tex = load_texture("pattern_191_diffuse.png");
-    GLuint normal_tex = load_texture("pattern_191_normal.png");
 
     renderer the_renderer;
 

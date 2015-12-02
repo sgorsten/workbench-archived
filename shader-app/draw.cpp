@@ -9,8 +9,27 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-GLuint compile_shader(GLenum type, const char * source)
+#include <GLFW\glfw3.h>
+
+opengl_context::opengl_context() : opengl_context(1)
 {
+    glfwInit();
+    glfwWindowHint(GLFW_VISIBLE, 0);
+    hidden = glfwCreateWindow(1, 1, "OpenGL Context", nullptr, nullptr);
+    glfwMakeContextCurrent(hidden);
+    glewInit();    
+    glfwDefaultWindowHints();
+}
+
+opengl_context::~opengl_context()
+{
+    if(hidden) glfwDestroyWindow(hidden);
+    glfwTerminate();
+}
+
+GLuint opengl_context::compile_shader(GLenum type, const char * source)
+{
+    glfwMakeContextCurrent(hidden);
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
@@ -29,8 +48,9 @@ GLuint compile_shader(GLenum type, const char * source)
     return shader;
 }
 
-GLuint link_program(std::initializer_list<GLuint> shaders)
+GLuint opengl_context::link_program(std::initializer_list<GLuint> shaders)
 {
+    glfwMakeContextCurrent(hidden);
     GLuint program = glCreateProgram();
     for(auto shader : shaders) glAttachShader(program, shader);
     glLinkProgram(program);
@@ -47,6 +67,33 @@ GLuint link_program(std::initializer_list<GLuint> shaders)
     }
 
     return program;
+}
+
+GLuint opengl_context::load_texture(const char * filename)
+{
+    glfwMakeContextCurrent(hidden);
+    int x, y, comp;
+    auto image = stbi_load(filename, &x, &y, &comp, 0);
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    switch(comp)
+    {
+    case 1: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE,       GL_UNSIGNED_BYTE, image); break;
+    case 2: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, image); break;
+    case 3: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGB,             GL_UNSIGNED_BYTE, image); break;
+    case 4: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGBA,            GL_UNSIGNED_BYTE, image); break;
+    }
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    stbi_image_free(image);  
+    return tex;
+}
+
+GLFWwindow * opengl_context::create_window(const int2 & dims, const char * title, GLFWmonitor * monitor)
+{
+    return glfwCreateWindow(dims.x, dims.y, title, monitor, hidden);
 }
 
 std::ostream & operator << (std::ostream & o, const gl_data_type & t)
@@ -225,60 +272,10 @@ uniform_block_desc get_uniform_block_description(GLuint program, const char * na
     return block;
 }
 
-GLuint load_texture(const char * filename)
-{
-    int x, y, comp;
-    auto image = stbi_load(filename, &x, &y, &comp, 0);
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    switch(comp)
-    {
-    case 1: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE,       GL_UNSIGNED_BYTE, image); break;
-    case 2: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, image); break;
-    case 3: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGB,             GL_UNSIGNED_BYTE, image); break;
-    case 4: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGBA,            GL_UNSIGNED_BYTE, image); break;
-    }
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    stbi_image_free(image);  
-    return tex;
-}
-
 void draw_list::begin_object(const draw_mesh * mesh, GLuint program, const uniform_block_desc * block)
 {
     objects.push_back({mesh, program, block, buffer.size()});
     buffer.resize(buffer.size() + block->data_size);
-}
-
-void draw_list::draw(GLuint ubo) const
-{
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
-    GLuint current_program = 0;
-    const draw_mesh * current_mesh = nullptr;
-    for(auto & object : objects)
-    {   
-        if(object.program != current_program)
-        {
-            glUseProgram(object.program);
-            // TODO: Bind textures as appropriate
-            current_program = object.program;
-        }
-
-        if(object.mesh != current_mesh)
-        {
-            glBindVertexArray(object.mesh->vao);
-            current_mesh = object.mesh;
-        }
-
-        glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-        glBufferData(GL_UNIFORM_BUFFER, object.block->data_size, buffer.data() + object.buffer_offset, GL_DYNAMIC_DRAW);
-        glBindBufferBase(GL_UNIFORM_BUFFER, object.block->binding, ubo);
-
-        glDrawElements(current_mesh->mode, current_mesh->element_count, current_mesh->index_type, 0);
-    }        
 }
 
 renderer::renderer()
@@ -296,5 +293,32 @@ void renderer::set_scene_uniforms(const uniform_block_desc & block, const void *
 
 void renderer::draw_objects(const draw_list & list)
 {
-    list.draw(object_ubo);
+    const byte * buffer = list.get_buffer().data();
+    GLuint current_program = 0;
+    const draw_mesh * current_mesh = nullptr;
+
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+
+    for(auto & object : list.get_objects())
+    {   
+        if(object.program != current_program)
+        {
+            glUseProgram(object.program);
+            // TODO: Bind textures as appropriate
+            current_program = object.program;
+        }
+
+        if(object.mesh != current_mesh)
+        {
+            glBindVertexArray(object.mesh->vao);
+            current_mesh = object.mesh;
+        }
+
+        glBindBuffer(GL_UNIFORM_BUFFER, object_ubo);
+        glBufferData(GL_UNIFORM_BUFFER, object.block->data_size, buffer + object.buffer_offset, GL_DYNAMIC_DRAW);
+        glBindBufferBase(GL_UNIFORM_BUFFER, object.block->binding, object_ubo);
+
+        glDrawElements(current_mesh->mode, current_mesh->element_count, current_mesh->index_type, 0);
+    }   
 }

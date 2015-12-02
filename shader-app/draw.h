@@ -12,8 +12,23 @@
 #include "linalg.h"
 using namespace linalg::aliases;
 
-GLuint compile_shader(GLenum type, const char * source);
-GLuint link_program(std::initializer_list<GLuint> shaders);
+struct GLFWwindow;
+struct GLFWmonitor;
+
+class opengl_context
+{
+    GLFWwindow * hidden;
+    opengl_context(int) : hidden() {}
+public:
+    opengl_context();
+    ~opengl_context();
+
+    GLuint compile_shader(GLenum type, const char * source);
+    GLuint link_program(std::initializer_list<GLuint> shaders);
+    GLuint load_texture(const char * filename);
+
+    GLFWwindow * create_window(const int2 & dims, const char * title, GLFWmonitor * monitor = nullptr);
+};
 
 enum class byte : uint8_t {};
 enum class native_type { float_, double_, int_, unsigned_int, bool_ };
@@ -66,11 +81,15 @@ struct draw_mesh
     GLuint vao; GLenum mode, index_type; int element_count;
 };
 
-struct draw_list
+// This type does not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.
+class draw_list
 {
     struct object { const draw_mesh * mesh; GLuint program; const uniform_block_desc * block; size_t buffer_offset; };
     std::vector<byte> buffer;
     std::vector<object> objects;
+public:
+    const std::vector<byte> & get_buffer() const { return buffer; }
+    const std::vector<object> & get_objects() const { return objects; }
 
     void begin_object(const draw_mesh * mesh, GLuint program, const uniform_block_desc * block);
     template<class T> void set_uniform(const char * name, const T & value)
@@ -78,8 +97,6 @@ struct draw_list
         const auto & object = objects.back();
         object.block->set_uniform(buffer.data() + object.buffer_offset, name, value);
     }
-
-    void draw(GLuint ubo) const;
 };
 
 class renderer
