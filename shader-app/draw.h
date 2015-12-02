@@ -12,13 +12,6 @@
 #include "linalg.h"
 using namespace linalg::aliases;
 
-void set_uniform(GLuint program, const char * name, int scalar);
-void set_uniform(GLuint program, const char * name, float scalar);
-void set_uniform(GLuint program, const char * name, const float2 & vec);
-void set_uniform(GLuint program, const char * name, const float3 & vec);
-void set_uniform(GLuint program, const char * name, const float4 & vec);
-void set_uniform(GLuint program, const char * name, const float4x4 & mat);
-
 GLuint compile_shader(GLenum type, const char * source);
 GLuint link_program(std::initializer_list<GLuint> shaders);
 
@@ -65,5 +58,28 @@ const gl_data_type * get_gl_data_type(GLenum gl_type);
 uniform_block_desc get_uniform_block_description(GLuint program, const char * name);
 std::ostream & operator << (std::ostream & o, const gl_data_type & t);
 std::ostream & operator << (std::ostream & o, const uniform_desc & u);
+
+GLuint load_texture(const char * filename);
+
+struct draw_mesh
+{
+    GLuint vao; GLenum mode, index_type; int element_count;
+};
+
+struct draw_list
+{
+    struct object { const draw_mesh * mesh; GLuint program; const uniform_block_desc * block; size_t buffer_offset; };
+    std::vector<byte> buffer;
+    std::vector<object> objects;
+
+    void begin_object(const draw_mesh * mesh, GLuint program, const uniform_block_desc * block);
+    template<class T> void set_uniform(const char * name, const T & value)
+    {
+        const auto & object = objects.back();
+        object.block->set_uniform(buffer.data() + object.buffer_offset, name, value);
+    }
+
+    void draw(GLuint ubo) const;
+};
 
 #endif

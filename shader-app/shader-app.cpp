@@ -13,9 +13,6 @@
 #include <algorithm>
 #pragma comment(lib, "opengl32.lib")
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 const char * vert_shader_source = R"(#version 420
 layout(shared, binding=1) uniform PerScene 
 {
@@ -78,83 +75,37 @@ void main()
     gl_FragColor = vec4(diffuseMtl * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
 })";
 
-void render_geometry(const geometry_mesh & mesh)
+draw_mesh make_draw_mesh(const geometry_mesh & mesh)
 {
+    GLuint vbo, ibo, vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(geometry_vertex), mesh.vertices.data(), GL_STATIC_DRAW);
+    const geometry_vertex * vertex = nullptr;
     for(GLuint i=0; i<5; ++i) glEnableVertexAttribArray(i);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->position);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->normal);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->tangent);
-    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->bitangent);
-    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &mesh.vertices.data()->texcoords);
-    glDrawElements(GL_TRIANGLES, mesh.triangles.size()*3, GL_UNSIGNED_INT, mesh.triangles.data());
-    for(GLuint i=0; i<5; ++i) glDisableVertexAttribArray(i);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->position);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->normal);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->tangent);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->bitangent);
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->texcoords);
+
+    glGenBuffers(1, &ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.triangles.size() * sizeof(int3), mesh.triangles.data(), GL_STATIC_DRAW);
+
+    glBindVertexArray(0);
+    return {vao, GL_TRIANGLES, GL_UNSIGNED_INT, mesh.triangles.size()*3};
 }
 
 struct scene_object
 {
     std::string name;
     const geometry_mesh * mesh;
+    const draw_mesh * dmesh;
     float3 position, diffuse;
-};
-
-GLuint load_texture(const char * filename)
-{
-    int x, y, comp;
-    auto image = stbi_load(filename, &x, &y, &comp, 0);
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    switch(comp)
-    {
-    case 1: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE,       GL_UNSIGNED_BYTE, image); break;
-    case 2: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, image); break;
-    case 3: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGB,             GL_UNSIGNED_BYTE, image); break;
-    case 4: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGBA,            GL_UNSIGNED_BYTE, image); break;
-    }
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    stbi_image_free(image);  
-    return tex;
-}
-
-struct draw_list
-{
-    struct object { const geometry_mesh * mesh; GLuint program; const uniform_block_desc * block; size_t buffer_offset; };
-    std::vector<byte> buffer;
-    std::vector<object> objects;
-
-    void begin_object(const geometry_mesh * mesh, GLuint program, const uniform_block_desc * block)
-    {
-        objects.push_back({mesh, program, block, buffer.size()});
-        buffer.resize(buffer.size() + block->data_size);
-    }
-
-    template<class T> void set_uniform(const char * name, const T & value)
-    {
-        const auto & object = objects.back();
-        object.block->set_uniform(buffer.data() + object.buffer_offset, name, value);
-    }
-
-    void draw(GLuint ubo)
-    {
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_CULL_FACE);
-        GLuint current_program = 0;
-        for(auto & object : objects)
-        {   
-            if(object.program != current_program)
-            {
-                glUseProgram(object.program);
-                // TODO: Bind textures as appropriate
-            }
-
-            glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-            glBufferData(GL_UNIFORM_BUFFER, object.block->data_size, buffer.data() + object.buffer_offset, GL_DYNAMIC_DRAW);
-            glBindBufferBase(GL_UNIFORM_BUFFER, object.block->binding, ubo);
-            render_geometry(*object.mesh);
-        }        
-    }
 };
 
 int main(int argc, char * argv[]) try
@@ -169,13 +120,7 @@ int main(int argc, char * argv[]) try
     generate_texcoords_cubic(ground, 0.5);
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
-    std::vector<scene_object> objects = {
-        {"Ground", &ground, {0,0,0}, {0.8,0.8,0.8}},
-        {"Box", &box, {-1,0,0}, {1,0.5f,0.5f}},
-        {"Cylinder", &cylinder, {0,0,0}, {0.5f,1,0.5f}},
-        {"Box 2", &box, {+1,0,0}, {0.5f,0.5f,1}}
-    };
-    
+   
     glfwInit();
     auto win = glfwCreateWindow(1280, 720, "Shader App", nullptr, nullptr);
     std::vector<input_event> events;
@@ -183,6 +128,17 @@ int main(int argc, char * argv[]) try
     glfwMakeContextCurrent(win);
 
     glewInit();
+
+    const auto g_ground = make_draw_mesh(ground);
+    const auto g_box = make_draw_mesh(box);
+    const auto g_cylinder = make_draw_mesh(cylinder);
+
+    std::vector<scene_object> objects = {
+        {"Ground", &ground, &g_ground, {0,0,0}, {0.8,0.8,0.8}},
+        {"Box", &box, &g_box, {-1,0,0}, {1,0.5f,0.5f}},
+        {"Cylinder", &cylinder, &g_cylinder, {0,0,0}, {0.5f,1,0.5f}},
+        {"Box 2", &box, &g_box, {+1,0,0}, {0.5f,0.5f,1}}
+    };
 
     GLuint vert_shader = compile_shader(GL_VERTEX_SHADER, vert_shader_source);
     GLuint frag_shader = compile_shader(GL_FRAGMENT_SHADER, frag_shader_source);
@@ -255,7 +211,7 @@ int main(int argc, char * argv[]) try
         for(auto & obj : objects)
         {   
             const float4x4 model = translation_matrix(obj.position);
-            list.begin_object(obj.mesh, program, &per_object);
+            list.begin_object(obj.dmesh, program, &per_object);
             list.set_uniform("u_model", model);
             list.set_uniform("u_modelIT", inverse(transpose(model)));
             list.set_uniform("u_diffuseMtl", obj.diffuse);
@@ -277,10 +233,10 @@ int main(int argc, char * argv[]) try
         glUseProgram(program);
         glActiveTexture(GL_TEXTURE0 + 0);
         glBindTexture(GL_TEXTURE_2D, diffuse_tex);
-        set_uniform(program, "u_diffuseTex", 0);
+        glUniform1i(glGetUniformLocation(program, "u_diffuseTex"), 0);
         glActiveTexture(GL_TEXTURE0 + 1);
         glBindTexture(GL_TEXTURE_2D, normal_tex);
-        set_uniform(program, "u_normalTex", 1);
+        glUniform1i(glGetUniformLocation(program, "u_normalTex"), 1);
 
         list.draw(ubos[1]);
 
