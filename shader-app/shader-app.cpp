@@ -75,36 +75,25 @@ void main()
     gl_FragColor = vec4(diffuseMtl * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
 })";
 
-draw_mesh make_draw_mesh(const geometry_mesh & mesh)
+std::shared_ptr<gfx::mesh> make_draw_mesh(std::shared_ptr<gfx::context> ctx, const geometry_mesh & mesh)
 {
-    GLuint vbo, ibo, vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(geometry_vertex), mesh.vertices.data(), GL_STATIC_DRAW);
-    const geometry_vertex * vertex = nullptr;
-    for(GLuint i=0; i<5; ++i) glEnableVertexAttribArray(i);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->position);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->normal);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->tangent);
-    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->bitangent);
-    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->texcoords);
-
-    glGenBuffers(1, &ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.triangles.size() * sizeof(int3), mesh.triangles.data(), GL_STATIC_DRAW);
-
-    glBindVertexArray(0);
-    return {vao, GL_TRIANGLES, GL_UNSIGNED_INT, mesh.triangles.size()*3};
+    const geometry_vertex * vertex = 0;
+    auto m = create_mesh(ctx);
+    gfx::set_vertices(*m, mesh.vertices.data(), mesh.vertices.size() * sizeof(geometry_vertex));
+    gfx::set_attribute(*m, 0, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->position);
+    gfx::set_attribute(*m, 1, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->normal);
+    gfx::set_attribute(*m, 2, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->tangent);
+    gfx::set_attribute(*m, 3, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->bitangent);
+    gfx::set_attribute(*m, 4, 2, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->texcoords);
+    gfx::set_indices(*m, GL_TRIANGLES, (const unsigned int *)mesh.triangles.data(), mesh.triangles.size() * 3);
+    return m;
 }
 
 struct scene_object
 {
     std::string name;
     const geometry_mesh * mesh;
-    const draw_mesh * dmesh;
+    std::shared_ptr<const gfx::mesh> dmesh;
     float3 position, diffuse;
 };
 
@@ -121,28 +110,27 @@ int main(int argc, char * argv[]) try
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
 
-    opengl_context gl;
-    GLuint vert_shader = gl.compile_shader(GL_VERTEX_SHADER, vert_shader_source);
-    GLuint frag_shader = gl.compile_shader(GL_FRAGMENT_SHADER, frag_shader_source);
-    GLuint program = gl.link_program({vert_shader, frag_shader});
+    auto ctx = gfx::create_context();
+    GLuint vert_shader = compile_shader(*ctx, GL_VERTEX_SHADER, vert_shader_source);
+    GLuint frag_shader = compile_shader(*ctx, GL_FRAGMENT_SHADER, frag_shader_source);
+    GLuint program = gfx::link_program(*ctx, {vert_shader, frag_shader});
 
-    GLuint diffuse_tex = gl.load_texture("pattern_191_diffuse.png");
-    GLuint normal_tex = gl.load_texture("pattern_191_normal.png");
+    GLuint diffuse_tex = load_texture(*ctx, "pattern_191_diffuse.png");
+    GLuint normal_tex = load_texture(*ctx, "pattern_191_normal.png");
 
-    auto win = gl.create_window({1280, 720}, "Shader App");
+    auto win = gfx::create_window(*ctx, {1280, 720}, "Shader App");
     std::vector<input_event> events;
     install_input_callbacks(win, events);
-    glfwMakeContextCurrent(win);
 
-    const auto g_ground = make_draw_mesh(ground);
-    const auto g_box = make_draw_mesh(box);
-    const auto g_cylinder = make_draw_mesh(cylinder);
+    const auto g_ground = make_draw_mesh(ctx, ground);
+    const auto g_box = make_draw_mesh(ctx, box);
+    const auto g_cylinder = make_draw_mesh(ctx, cylinder);
 
     std::vector<scene_object> objects = {
-        {"Ground", &ground, &g_ground, {0,0,0}, {0.8,0.8,0.8}},
-        {"Box", &box, &g_box, {-1,0,0}, {1,0.5f,0.5f}},
-        {"Cylinder", &cylinder, &g_cylinder, {0,0,0}, {0.5f,1,0.5f}},
-        {"Box 2", &box, &g_box, {+1,0,0}, {0.5f,0.5f,1}}
+        {"Ground", &ground, g_ground, {0,0,0}, {0.8,0.8,0.8}},
+        {"Box", &box, g_box, {-1,0,0}, {1,0.5f,0.5f}},
+        {"Cylinder", &cylinder, g_cylinder, {0,0,0}, {0.5f,1,0.5f}},
+        {"Box 2", &box, g_box, {+1,0,0}, {0.5f,0.5f,1}}
     };
 
     auto per_scene = get_uniform_block_description(program, "PerScene");
@@ -216,6 +204,7 @@ int main(int argc, char * argv[]) try
 
         int fw, fh;
         glfwGetFramebufferSize(win, &fw, &fh);
+        glfwMakeContextCurrent(win);
         glViewport(0, 0, fw, fh);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

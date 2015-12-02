@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <vector>
+#include <memory>
 #include <GL\glew.h>
 
 #include "linalg.h"
@@ -15,20 +16,23 @@ using namespace linalg::aliases;
 struct GLFWwindow;
 struct GLFWmonitor;
 
-class opengl_context
+namespace gfx
 {
-    GLFWwindow * hidden;
-    opengl_context(int) : hidden() {}
-public:
-    opengl_context();
-    ~opengl_context();
+    struct context;
+    struct mesh;
 
-    GLuint compile_shader(GLenum type, const char * source);
-    GLuint link_program(std::initializer_list<GLuint> shaders);
-    GLuint load_texture(const char * filename);
+    std::shared_ptr<context>    create_context  ();
+    GLuint                      compile_shader  (context & ctx, GLenum type, const char * source);
+    GLuint                      link_program    (context & ctx, std::initializer_list<GLuint> shaders);
+    GLuint                      load_texture    (context & ctx, const char * filename);
 
-    GLFWwindow * create_window(const int2 & dims, const char * title, GLFWmonitor * monitor = nullptr);
-};
+    std::shared_ptr<mesh>       create_mesh     (std::shared_ptr<context> ctx);
+    void                        set_vertices    (mesh & m, const void * data, size_t size);
+    void                        set_attribute   (mesh & m, int index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid * pointer);
+    void                        set_indices     (mesh & m, GLenum mode, const unsigned int * data, size_t count);
+
+    GLFWwindow *                create_window   (context & ctx,  const int2 & dims, const char * title, GLFWmonitor * monitor = nullptr);
+}
 
 enum class byte : uint8_t {};
 enum class native_type { float_, double_, int_, unsigned_int, bool_ };
@@ -76,22 +80,17 @@ std::ostream & operator << (std::ostream & o, const uniform_desc & u);
 
 GLuint load_texture(const char * filename);
 
-struct draw_mesh
-{
-    GLuint vao; GLenum mode, index_type; int element_count;
-};
-
 // This type does not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.
 class draw_list
 {
-    struct object { const draw_mesh * mesh; GLuint program; const uniform_block_desc * block; size_t buffer_offset; };
+    struct object { std::shared_ptr<const gfx::mesh> mesh; GLuint program; const uniform_block_desc * block; size_t buffer_offset; };
     std::vector<byte> buffer;
     std::vector<object> objects;
 public:
     const std::vector<byte> & get_buffer() const { return buffer; }
     const std::vector<object> & get_objects() const { return objects; }
 
-    void begin_object(const draw_mesh * mesh, GLuint program, const uniform_block_desc * block);
+    void begin_object(std::shared_ptr<const gfx::mesh> mesh, GLuint program, const uniform_block_desc * block);
     template<class T> void set_uniform(const char * name, const T & value)
     {
         const auto & object = objects.back();

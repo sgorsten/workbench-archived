@@ -11,25 +11,31 @@
 
 #include <GLFW\glfw3.h>
 
-opengl_context::opengl_context() : opengl_context(1)
+struct gfx::context
+{
+    GLFWwindow * hidden = nullptr;
+    ~context()
+    {
+        if(hidden) glfwDestroyWindow(hidden);
+        glfwTerminate();
+    }
+};
+
+std::shared_ptr<gfx::context> gfx::create_context()
 {
     glfwInit();
+    auto ctx = std::make_shared<gfx::context>();
     glfwWindowHint(GLFW_VISIBLE, 0);
-    hidden = glfwCreateWindow(1, 1, "OpenGL Context", nullptr, nullptr);
-    glfwMakeContextCurrent(hidden);
+    ctx->hidden = glfwCreateWindow(1, 1, "OpenGL Context", nullptr, nullptr);
+    glfwMakeContextCurrent(ctx->hidden);
     glewInit();    
     glfwDefaultWindowHints();
+    return ctx;
 }
 
-opengl_context::~opengl_context()
+GLuint gfx::compile_shader(context & ctx, GLenum type, const char * source)
 {
-    if(hidden) glfwDestroyWindow(hidden);
-    glfwTerminate();
-}
-
-GLuint opengl_context::compile_shader(GLenum type, const char * source)
-{
-    glfwMakeContextCurrent(hidden);
+    glfwMakeContextCurrent(ctx.hidden);
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
@@ -48,9 +54,9 @@ GLuint opengl_context::compile_shader(GLenum type, const char * source)
     return shader;
 }
 
-GLuint opengl_context::link_program(std::initializer_list<GLuint> shaders)
+GLuint gfx::link_program(context & ctx, std::initializer_list<GLuint> shaders)
 {
-    glfwMakeContextCurrent(hidden);
+    glfwMakeContextCurrent(ctx.hidden);
     GLuint program = glCreateProgram();
     for(auto shader : shaders) glAttachShader(program, shader);
     glLinkProgram(program);
@@ -69,9 +75,9 @@ GLuint opengl_context::link_program(std::initializer_list<GLuint> shaders)
     return program;
 }
 
-GLuint opengl_context::load_texture(const char * filename)
+GLuint gfx::load_texture(context & ctx, const char * filename)
 {
-    glfwMakeContextCurrent(hidden);
+    glfwMakeContextCurrent(ctx.hidden);
     int x, y, comp;
     auto image = stbi_load(filename, &x, &y, &comp, 0);
     GLuint tex = 0;
@@ -91,9 +97,52 @@ GLuint opengl_context::load_texture(const char * filename)
     return tex;
 }
 
-GLFWwindow * opengl_context::create_window(const int2 & dims, const char * title, GLFWmonitor * monitor)
+struct gfx::mesh
 {
-    return glfwCreateWindow(dims.x, dims.y, title, monitor, hidden);
+    struct attribute { GLint size; GLenum type; GLboolean normalized; const GLvoid * pointer; };
+
+    std::shared_ptr<gfx::context> ctx;
+    attribute attributes[8];
+    GLsizei vertex_stride;
+    GLenum primitive_mode;
+    GLsizei element_count;
+    GLuint vbo, ibo;
+};
+
+std::shared_ptr<gfx::mesh> gfx::create_mesh(std::shared_ptr<context> ctx)
+{
+    return std::make_shared<mesh>(mesh{ctx});
+}
+
+void gfx::set_vertices(mesh & m, const void * data, size_t size)
+{
+    glfwMakeContextCurrent(m.ctx->hidden);
+    if(!m.vbo) glGenBuffers(1, &m.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+    glBufferData(GL_ARRAY_BUFFER, size, data, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void gfx::set_attribute(mesh & m, int index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid * pointer)
+{
+    m.attributes[index] = {size, type, normalized, pointer};
+    m.vertex_stride = stride; // TODO: Ensure consistency
+}
+
+void gfx::set_indices(mesh & m, GLenum mode, const unsigned int * data, size_t count)
+{
+    glfwMakeContextCurrent(m.ctx->hidden);
+    if(!m.ibo) glGenBuffers(1, &m.ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * count, data, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    m.primitive_mode = mode;
+    m.element_count = count;
+}
+
+GLFWwindow * gfx::create_window(context & ctx,  const int2 & dims, const char * title, GLFWmonitor * monitor)
+{
+    return glfwCreateWindow(dims.x, dims.y, title, monitor, ctx.hidden);
 }
 
 std::ostream & operator << (std::ostream & o, const gl_data_type & t)
@@ -272,7 +321,7 @@ uniform_block_desc get_uniform_block_description(GLuint program, const char * na
     return block;
 }
 
-void draw_list::begin_object(const draw_mesh * mesh, GLuint program, const uniform_block_desc * block)
+void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, GLuint program, const uniform_block_desc * block)
 {
     objects.push_back({mesh, program, block, buffer.size()});
     buffer.resize(buffer.size() + block->data_size);
@@ -295,7 +344,7 @@ void renderer::draw_objects(const draw_list & list)
 {
     const byte * buffer = list.get_buffer().data();
     GLuint current_program = 0;
-    const draw_mesh * current_mesh = nullptr;
+    const gfx::mesh * current_mesh = nullptr;
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -309,16 +358,28 @@ void renderer::draw_objects(const draw_list & list)
             current_program = object.program;
         }
 
-        if(object.mesh != current_mesh)
+        if(object.mesh.get() != current_mesh)
         {
-            glBindVertexArray(object.mesh->vao);
-            current_mesh = object.mesh;
+            current_mesh = object.mesh.get();
+            
+            glBindBuffer(GL_ARRAY_BUFFER, current_mesh->vbo);
+            for(int i=0; i<8; ++i)
+            {
+                auto & a = current_mesh->attributes[i];
+                if(a.size)
+                {
+                    glVertexAttribPointer(i, a.size, a.type, a.normalized, current_mesh->vertex_stride, a.pointer);
+                    glEnableVertexAttribArray(i);
+                }
+                else glDisableVertexAttribArray(i);
+            }
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, current_mesh->ibo);           
         }
 
         glBindBuffer(GL_UNIFORM_BUFFER, object_ubo);
         glBufferData(GL_UNIFORM_BUFFER, object.block->data_size, buffer + object.buffer_offset, GL_DYNAMIC_DRAW);
         glBindBufferBase(GL_UNIFORM_BUFFER, object.block->binding, object_ubo);
 
-        glDrawElements(current_mesh->mode, current_mesh->element_count, current_mesh->index_type, 0);
+        glDrawElements(current_mesh->primitive_mode, current_mesh->element_count, GL_UNSIGNED_INT, 0);
     }   
 }
