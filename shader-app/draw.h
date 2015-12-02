@@ -82,4 +82,14 @@ struct draw_list
     void draw(GLuint ubo) const;
 };
 
+class renderer
+{
+    GLuint scene_ubo, object_ubo;
+public:
+    renderer();
+
+    void set_scene_uniforms(const uniform_block_desc & block, const void * data);
+    void draw_objects(const draw_list & list);
+};
+
 #endif

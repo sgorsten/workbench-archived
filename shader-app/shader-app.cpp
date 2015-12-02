@@ -149,9 +149,8 @@ int main(int argc, char * argv[]) try
 
     GLuint diffuse_tex = load_texture("pattern_191_diffuse.png");
     GLuint normal_tex = load_texture("pattern_191_normal.png");
-    
-    GLuint ubos[2];
-    glGenBuffers(2, ubos);
+
+    renderer the_renderer;
 
     bool ml=0, mr=0, bf=0, bl=0, bb=0, br=0;
     double t0 = glfwGetTime();
@@ -226,9 +225,7 @@ int main(int argc, char * argv[]) try
         per_scene.set_uniform(buffer.data(), "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
         per_scene.set_uniform(buffer.data(), "u_eyePos", cam.position);
         per_scene.set_uniform(buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));       
-        glBindBuffer(GL_UNIFORM_BUFFER, ubos[0]);
-        glBufferData(GL_UNIFORM_BUFFER, buffer.size(), buffer.data(), GL_STREAM_DRAW);
-        glBindBufferBase(GL_UNIFORM_BUFFER, per_scene.binding, ubos[0]);
+        the_renderer.set_scene_uniforms(per_scene, buffer.data());
 
         glUseProgram(program);
         glActiveTexture(GL_TEXTURE0 + 0);
@@ -238,7 +235,7 @@ int main(int argc, char * argv[]) try
         glBindTexture(GL_TEXTURE_2D, normal_tex);
         glUniform1i(glGetUniformLocation(program, "u_normalTex"), 1);
 
-        list.draw(ubos[1]);
+        the_renderer.draw_objects(list);
 
         glfwSwapBuffers(win);
     }

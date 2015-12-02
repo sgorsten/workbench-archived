@@ -280,3 +280,21 @@ void draw_list::draw(GLuint ubo) const
         glDrawElements(current_mesh->mode, current_mesh->element_count, current_mesh->index_type, 0);
     }        
 }
+
+renderer::renderer()
+{
+    glGenBuffers(1, &scene_ubo);
+    glGenBuffers(1, &object_ubo);
+}
+
+void renderer::set_scene_uniforms(const uniform_block_desc & block, const void * data)
+{
+    glBindBuffer(GL_UNIFORM_BUFFER, scene_ubo);
+    glBufferData(GL_UNIFORM_BUFFER, block.data_size, data, GL_STREAM_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, block.binding, scene_ubo);
+}
+
+void renderer::draw_objects(const draw_list & list)
+{
+    list.draw(object_ubo);
+}
