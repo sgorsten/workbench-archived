@@ -33,46 +33,62 @@ std::shared_ptr<gfx::context> gfx::create_context()
     return ctx;
 }
 
-GLuint gfx::compile_shader(context & ctx, GLenum type, const char * source)
+// std::shared_ptr<program>    link_program    (context & ctx, std::initializer_list<shader> shaders);
+
+struct gfx::shader
+{
+    GLuint object_name = 0;
+    ~shader() { if(object_name) glDeleteShader(object_name); }
+};
+
+std::shared_ptr<gfx::shader> gfx::compile_shader(context & ctx, GLenum type, const char * source)
 {
     glfwMakeContextCurrent(ctx.hidden);
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
+    auto s = std::make_shared<shader>();
+    s->object_name = glCreateShader(type);
+    glShaderSource(s->object_name, 1, &source, nullptr);
+    glCompileShader(s->object_name);
 
     GLint status, length;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+    glGetShaderiv(s->object_name, GL_COMPILE_STATUS, &status);
     if(status == GL_FALSE)
     {
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+        glGetShaderiv(s->object_name, GL_INFO_LOG_LENGTH, &length);
         std::string log(length-1, ' ');
-        glGetShaderInfoLog(shader, length, nullptr, &log[0]);
-        glDeleteShader(shader);
+        glGetShaderInfoLog(s->object_name, length, nullptr, &log[0]);
         throw std::runtime_error("GLSL compile error: " + log);
     }
 
-    return shader;
+    return s;
 }
 
-GLuint gfx::link_program(context & ctx, std::initializer_list<GLuint> shaders)
+struct gfx::program
+{
+    GLuint object_name = 0;
+    ~program() { if(object_name) glDeleteProgram(object_name); }
+};
+
+GLuint get_name(const gfx::program & p) { return p.object_name; }
+
+std::shared_ptr<gfx::program> gfx::link_program(context & ctx, std::initializer_list<std::shared_ptr<shader>> shaders)
 {
     glfwMakeContextCurrent(ctx.hidden);
-    GLuint program = glCreateProgram();
-    for(auto shader : shaders) glAttachShader(program, shader);
-    glLinkProgram(program);
+    auto p = std::make_shared<gfx::program>();
+    p->object_name = glCreateProgram();
+    for(auto s : shaders) glAttachShader(p->object_name, s->object_name);
+    glLinkProgram(p->object_name);
 
     GLint status, length;
-    glGetProgramiv(program, GL_LINK_STATUS, &status);
+    glGetProgramiv(p->object_name, GL_LINK_STATUS, &status);
     if(status == GL_FALSE)
     {
-        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+        glGetProgramiv(p->object_name, GL_INFO_LOG_LENGTH, &length);
         std::string log(length-1, ' ');
-        glGetProgramInfoLog(program, length, nullptr, &log[0]);
-        glDeleteProgram(program);
+        glGetProgramInfoLog(p->object_name, length, nullptr, &log[0]);
         throw std::runtime_error("GLSL link error: " + log);
     }
 
-    return program;
+    return p;
 }
 
 GLuint gfx::load_texture(context & ctx, const char * filename)
@@ -237,34 +253,34 @@ const gl_data_type * get_gl_data_type(GLenum gl_type)
     return nullptr;
 }
 
-uniform_block_desc get_uniform_block_description(GLuint program, const char * name)
+uniform_block_desc get_uniform_block_description(const gfx::program & program, const char * name)
 {
-    GLuint block_index = glGetUniformBlockIndex(program, name);
+    GLuint block_index = glGetUniformBlockIndex(program.object_name, name);
     if(block_index == GL_INVALID_INDEX) throw std::logic_error("missing uniform block");
 
     GLint binding, data_size;
-    glGetActiveUniformBlockiv(program, block_index, GL_UNIFORM_BLOCK_BINDING, &binding);
-    glGetActiveUniformBlockiv(program, block_index, GL_UNIFORM_BLOCK_DATA_SIZE, &data_size);
+    glGetActiveUniformBlockiv(program.object_name, block_index, GL_UNIFORM_BLOCK_BINDING, &binding);
+    glGetActiveUniformBlockiv(program.object_name, block_index, GL_UNIFORM_BLOCK_DATA_SIZE, &data_size);
     uniform_block_desc block = {name, block_index, binding, data_size};
 
     GLint num_uniforms, max_name_length;
-    glGetProgramiv(program, GL_ACTIVE_UNIFORMS, &num_uniforms);
-    glGetProgramiv(program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_name_length);
+    glGetProgramiv(program.object_name, GL_ACTIVE_UNIFORMS, &num_uniforms);
+    glGetProgramiv(program.object_name, GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_name_length);
     std::vector<char> name_buffer(max_name_length);
     for(GLuint uniform_index=0; uniform_index<num_uniforms; ++uniform_index)
     {
         GLint uniform_block_index=GL_INVALID_INDEX;
-        glGetActiveUniformsiv(program, 1, &uniform_index, GL_UNIFORM_BLOCK_INDEX, &uniform_block_index);
+        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_BLOCK_INDEX, &uniform_block_index);
         if(uniform_block_index != block_index) continue;
 
         GLint type=0, size=0, offset=0, array_stride=0, matrix_stride=0, is_row_major=0;
-        glGetActiveUniformsiv(program, 1, &uniform_index, GL_UNIFORM_TYPE, &type);
-        glGetActiveUniformsiv(program, 1, &uniform_index, GL_UNIFORM_SIZE, &size);
-        glGetActiveUniformsiv(program, 1, &uniform_index, GL_UNIFORM_OFFSET, &offset);
-        glGetActiveUniformsiv(program, 1, &uniform_index, GL_UNIFORM_ARRAY_STRIDE, &array_stride);
-        glGetActiveUniformsiv(program, 1, &uniform_index, GL_UNIFORM_MATRIX_STRIDE, &matrix_stride);
-        glGetActiveUniformsiv(program, 1, &uniform_index, GL_UNIFORM_IS_ROW_MAJOR, &is_row_major);
-        glGetActiveUniformName(program, uniform_index, name_buffer.size(), nullptr, name_buffer.data());
+        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_TYPE, &type);
+        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_SIZE, &size);
+        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_OFFSET, &offset);
+        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_ARRAY_STRIDE, &array_stride);
+        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_MATRIX_STRIDE, &matrix_stride);
+        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_IS_ROW_MAJOR, &is_row_major);
+        glGetActiveUniformName(program.object_name, uniform_index, name_buffer.size(), nullptr, name_buffer.data());
         if(auto * t = get_gl_data_type(type))
         {
             uniform_desc u;
@@ -321,7 +337,7 @@ uniform_block_desc get_uniform_block_description(GLuint program, const char * na
     return block;
 }
 
-void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, GLuint program, const uniform_block_desc * block)
+void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program, const uniform_block_desc * block)
 {
     objects.push_back({mesh, program, block, buffer.size()});
     buffer.resize(buffer.size() + block->data_size);
@@ -343,7 +359,7 @@ void renderer::set_scene_uniforms(const uniform_block_desc & block, const void *
 void renderer::draw_objects(const draw_list & list)
 {
     const byte * buffer = list.get_buffer().data();
-    GLuint current_program = 0;
+    const gfx::program * current_program = nullptr;
     const gfx::mesh * current_mesh = nullptr;
 
     glEnable(GL_DEPTH_TEST);
@@ -351,11 +367,11 @@ void renderer::draw_objects(const draw_list & list)
 
     for(auto & object : list.get_objects())
     {   
-        if(object.program != current_program)
+        if(object.program.get() != current_program)
         {
-            glUseProgram(object.program);
-            // TODO: Bind textures as appropriate
-            current_program = object.program;
+            current_program = object.program.get();
+            glUseProgram(current_program->object_name);
+            // TODO: Bind scene textures as appropriate
         }
 
         if(object.mesh.get() != current_mesh)

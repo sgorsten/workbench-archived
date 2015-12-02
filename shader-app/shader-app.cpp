@@ -111,9 +111,9 @@ int main(int argc, char * argv[]) try
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
 
     auto ctx = gfx::create_context();
-    GLuint vert_shader = compile_shader(*ctx, GL_VERTEX_SHADER, vert_shader_source);
-    GLuint frag_shader = compile_shader(*ctx, GL_FRAGMENT_SHADER, frag_shader_source);
-    GLuint program = gfx::link_program(*ctx, {vert_shader, frag_shader});
+    auto vert_shader = compile_shader(*ctx, GL_VERTEX_SHADER, vert_shader_source);
+    auto frag_shader = compile_shader(*ctx, GL_FRAGMENT_SHADER, frag_shader_source);
+    auto program = gfx::link_program(*ctx, {vert_shader, frag_shader});
 
     GLuint diffuse_tex = load_texture(*ctx, "pattern_191_diffuse.png");
     GLuint normal_tex = load_texture(*ctx, "pattern_191_normal.png");
@@ -133,8 +133,8 @@ int main(int argc, char * argv[]) try
         {"Box 2", &box, g_box, {+1,0,0}, {0.5f,0.5f,1}}
     };
 
-    auto per_scene = get_uniform_block_description(program, "PerScene");
-    auto per_object = get_uniform_block_description(program, "PerObject");
+    auto per_scene = get_uniform_block_description(*program, "PerScene");
+    auto per_object = get_uniform_block_description(*program, "PerObject");
 
     renderer the_renderer;
 
@@ -214,13 +214,13 @@ int main(int argc, char * argv[]) try
         per_scene.set_uniform(buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));       
         the_renderer.set_scene_uniforms(per_scene, buffer.data());
 
-        glUseProgram(program);
+        glUseProgram(get_name(*program));
         glActiveTexture(GL_TEXTURE0 + 0);
         glBindTexture(GL_TEXTURE_2D, diffuse_tex);
-        glUniform1i(glGetUniformLocation(program, "u_diffuseTex"), 0);
+        glUniform1i(glGetUniformLocation(get_name(*program), "u_diffuseTex"), 0);
         glActiveTexture(GL_TEXTURE0 + 1);
         glBindTexture(GL_TEXTURE_2D, normal_tex);
-        glUniform1i(glGetUniformLocation(program, "u_normalTex"), 1);
+        glUniform1i(glGetUniformLocation(get_name(*program), "u_normalTex"), 1);
 
         the_renderer.draw_objects(list);
 
