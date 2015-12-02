@@ -23,7 +23,13 @@ layout(shared, binding=1) uniform PerScene
     vec3 u_eyePos;
     vec3 u_lightDir;
 };
-uniform mat4 u_model, u_modelIT;
+
+layout(binding=2) uniform PerObject
+{
+    mat4 u_model, u_modelIT;
+    vec3 u_diffuseMtl;
+};
+
 layout(location = 0) in vec3 v_position; 
 layout(location = 1) in vec3 v_normal; 
 layout(location = 2) in vec3 v_tangent; 
@@ -48,9 +54,15 @@ layout(shared, binding=1) uniform PerScene
     vec3 u_eyePos;
     vec3 u_lightDir;
 };
+
+layout(binding=2) uniform PerObject
+{
+    mat4 u_model, u_modelIT;
+    vec3 u_diffuseMtl;
+};
+
 uniform sampler2D u_diffuseTex;
 uniform sampler2D u_normalTex;
-uniform vec3 u_diffuseMtl;
 in vec3 position, normal, tangent, bitangent;
 in vec2 texCoord;
 void main() 
@@ -106,6 +118,45 @@ GLuint load_texture(const char * filename)
     return tex;
 }
 
+struct draw_list
+{
+    struct object { const geometry_mesh * mesh; GLuint program; const uniform_block_desc * block; size_t buffer_offset; };
+    std::vector<byte> buffer;
+    std::vector<object> objects;
+
+    void begin_object(const geometry_mesh * mesh, GLuint program, const uniform_block_desc * block)
+    {
+        objects.push_back({mesh, program, block, buffer.size()});
+        buffer.resize(buffer.size() + block->data_size);
+    }
+
+    template<class T> void set_uniform(const char * name, const T & value)
+    {
+        const auto & object = objects.back();
+        object.block->set_uniform(buffer.data() + object.buffer_offset, name, value);
+    }
+
+    void draw(GLuint ubo)
+    {
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+        GLuint current_program = 0;
+        for(auto & object : objects)
+        {   
+            if(object.program != current_program)
+            {
+                glUseProgram(object.program);
+                // TODO: Bind textures as appropriate
+            }
+
+            glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+            glBufferData(GL_UNIFORM_BUFFER, object.block->data_size, buffer.data() + object.buffer_offset, GL_DYNAMIC_DRAW);
+            glBindBufferBase(GL_UNIFORM_BUFFER, object.block->binding, ubo);
+            render_geometry(*object.mesh);
+        }        
+    }
+};
+
 int main(int argc, char * argv[]) try
 {
     camera cam = {};
@@ -137,15 +188,15 @@ int main(int argc, char * argv[]) try
     GLuint frag_shader = compile_shader(GL_FRAGMENT_SHADER, frag_shader_source);
     GLuint program = link_program({vert_shader, frag_shader});
 
-    auto block = get_uniform_block_description(program, "PerScene");
-    for(auto & u : block.uniforms)
-    {
-        std::cout << u << std::endl;
-    }
+    auto per_scene = get_uniform_block_description(program, "PerScene");
+    auto per_object = get_uniform_block_description(program, "PerObject");
 
     GLuint diffuse_tex = load_texture("pattern_191_diffuse.png");
     GLuint normal_tex = load_texture("pattern_191_normal.png");
     
+    GLuint ubos[2];
+    glGenBuffers(2, ubos);
+
     bool ml=0, mr=0, bf=0, bl=0, bb=0, br=0;
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
@@ -200,40 +251,38 @@ int main(int argc, char * argv[]) try
             if(mag2(move) > 0) cam.position += normalize(move) * (timestep * 8);
         }
 
+        draw_list list;
+        for(auto & obj : objects)
+        {   
+            const float4x4 model = translation_matrix(obj.position);
+            list.begin_object(obj.mesh, program, &per_object);
+            list.set_uniform("u_model", model);
+            list.set_uniform("u_modelIT", inverse(transpose(model)));
+            list.set_uniform("u_diffuseMtl", obj.diffuse);
+        }
+
         int fw, fh;
         glfwGetFramebufferSize(win, &fw, &fh);
         glViewport(0, 0, fw, fh);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glActiveTexture(GL_TEXTURE0 + 0);
-        glBindTexture(GL_TEXTURE_2D, diffuse_tex);
-        glActiveTexture(GL_TEXTURE0 + 1);
-        glBindTexture(GL_TEXTURE_2D, normal_tex);
-
-        std::vector<byte> buffer(block.data_size);
-        block.set_uniform(buffer.data(), "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
-        block.set_uniform(buffer.data(), "u_eyePos", cam.position);
-        block.set_uniform(buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));       
-
-        GLuint ubo;
-        glGenBuffers(1, &ubo);
-        glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-        glBufferData(GL_UNIFORM_BUFFER, buffer.size(), buffer.data(), GL_DYNAMIC_DRAW);
-        glBindBufferBase(GL_UNIFORM_BUFFER, block.binding, ubo);
+        std::vector<byte> buffer(per_scene.data_size);
+        per_scene.set_uniform(buffer.data(), "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
+        per_scene.set_uniform(buffer.data(), "u_eyePos", cam.position);
+        per_scene.set_uniform(buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));       
+        glBindBuffer(GL_UNIFORM_BUFFER, ubos[0]);
+        glBufferData(GL_UNIFORM_BUFFER, buffer.size(), buffer.data(), GL_STREAM_DRAW);
+        glBindBufferBase(GL_UNIFORM_BUFFER, per_scene.binding, ubos[0]);
 
         glUseProgram(program);
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_CULL_FACE);
-        for(auto & obj : objects)
-        {   
-            const float4x4 model = translation_matrix(obj.position);
-            set_uniform(program, "u_diffuseTex", 0);
-            set_uniform(program, "u_normalTex", 1);
-            set_uniform(program, "u_model", model);
-            set_uniform(program, "u_modelIT", inverse(transpose(model)));
-            set_uniform(program, "u_diffuseMtl", obj.diffuse);
-            render_geometry(*obj.mesh);
-        }
+        glActiveTexture(GL_TEXTURE0 + 0);
+        glBindTexture(GL_TEXTURE_2D, diffuse_tex);
+        set_uniform(program, "u_diffuseTex", 0);
+        glActiveTexture(GL_TEXTURE0 + 1);
+        glBindTexture(GL_TEXTURE_2D, normal_tex);
+        set_uniform(program, "u_normalTex", 1);
+
+        list.draw(ubos[1]);
 
         glfwSwapBuffers(win);
     }

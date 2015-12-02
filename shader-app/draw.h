@@ -57,8 +57,8 @@ struct uniform_block_desc
     size_t data_size;
     std::vector<uniform_desc> uniforms;
 
-    const uniform_desc * get_uniform_desc(const char * name) { for(auto & u : uniforms) if(u.name == name) return &u; return nullptr; }
-    template<class T> void set_uniform(byte buffer[], const char * name, const T & value) { if(auto * u = get_uniform_desc(name)) u->set_value(buffer, value); }
+    const uniform_desc * get_uniform_desc(const char * name) const { for(auto & u : uniforms) if(u.name == name) return &u; return nullptr; }
+    template<class T> void set_uniform(byte buffer[], const char * name, const T & value) const { if(auto * u = get_uniform_desc(name)) u->set_value(buffer, value); }
 };
 
 const gl_data_type * get_gl_data_type(GLenum gl_type);
