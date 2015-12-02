@@ -16,8 +16,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-const char * vert_shader_source = R"(#version 330
-uniform mat4 u_viewProj; 
+const char * vert_shader_source = R"(#version 420
+layout(shared, binding=1) uniform PerScene 
+{
+    mat4 u_viewProj; 
+    vec3 u_eyePos;
+    vec3 u_lightDir;
+};
 uniform mat4 u_model, u_modelIT;
 layout(location = 0) in vec3 v_position; 
 layout(location = 1) in vec3 v_normal; 
@@ -36,9 +41,13 @@ void main()
     gl_Position = u_viewProj * vec4(position,1);
 })";
 
-const char * frag_shader_source = R"(#version 330
-uniform vec3 u_eyePos;
-uniform vec3 u_lightDir;
+const char * frag_shader_source = R"(#version 420
+layout(shared, binding=1) uniform PerScene 
+{
+    mat4 u_viewProj; 
+    vec3 u_eyePos;
+    vec3 u_lightDir;
+};
 uniform sampler2D u_diffuseTex;
 uniform sampler2D u_normalTex;
 uniform vec3 u_diffuseMtl;
@@ -128,6 +137,12 @@ int main(int argc, char * argv[]) try
     GLuint frag_shader = compile_shader(GL_FRAGMENT_SHADER, frag_shader_source);
     GLuint program = link_program({vert_shader, frag_shader});
 
+    auto block = get_uniform_block_description(program, "PerScene");
+    for(auto & u : block.uniforms)
+    {
+        std::cout << u << std::endl;
+    }
+
     GLuint diffuse_tex = load_texture("pattern_191_diffuse.png");
     GLuint normal_tex = load_texture("pattern_191_normal.png");
     
@@ -195,11 +210,18 @@ int main(int argc, char * argv[]) try
         glActiveTexture(GL_TEXTURE0 + 1);
         glBindTexture(GL_TEXTURE_2D, normal_tex);
 
-        glUseProgram(program);
-        set_uniform(program, "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
-        set_uniform(program, "u_eyePos", cam.position);
-        set_uniform(program, "u_lightDir", normalize(float3(0.2f,1,0.1f)));
+        std::vector<byte> buffer(block.data_size);
+        block.set_uniform(buffer.data(), "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
+        block.set_uniform(buffer.data(), "u_eyePos", cam.position);
+        block.set_uniform(buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));       
 
+        GLuint ubo;
+        glGenBuffers(1, &ubo);
+        glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+        glBufferData(GL_UNIFORM_BUFFER, buffer.size(), buffer.data(), GL_DYNAMIC_DRAW);
+        glBindBufferBase(GL_UNIFORM_BUFFER, block.binding, ubo);
+
+        glUseProgram(program);
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
         for(auto & obj : objects)
