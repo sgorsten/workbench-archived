@@ -79,13 +79,13 @@ std::shared_ptr<gfx::mesh> make_draw_mesh(std::shared_ptr<gfx::context> ctx, con
 {
     const geometry_vertex * vertex = 0;
     auto m = create_mesh(ctx);
-    gfx::set_vertices(*m, mesh.vertices.data(), mesh.vertices.size() * sizeof(geometry_vertex));
-    gfx::set_attribute(*m, 0, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->position);
-    gfx::set_attribute(*m, 1, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->normal);
-    gfx::set_attribute(*m, 2, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->tangent);
-    gfx::set_attribute(*m, 3, 3, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->bitangent);
-    gfx::set_attribute(*m, 4, 2, GL_FLOAT, GL_FALSE, sizeof(geometry_vertex), &vertex->texcoords);
-    gfx::set_indices(*m, GL_TRIANGLES, (const unsigned int *)mesh.triangles.data(), mesh.triangles.size() * 3);
+    set_vertices(*m, mesh.vertices.data(), mesh.vertices.size() * sizeof(geometry_vertex));
+    set_attribute(*m, 0, &geometry_vertex::position);
+    set_attribute(*m, 1, &geometry_vertex::normal);
+    set_attribute(*m, 2, &geometry_vertex::tangent);
+    set_attribute(*m, 3, &geometry_vertex::bitangent);
+    set_attribute(*m, 4, &geometry_vertex::texcoords);
+    set_indices(*m, GL_TRIANGLES, (const unsigned int *)mesh.triangles.data(), mesh.triangles.size() * 3);
     return m;
 }
 

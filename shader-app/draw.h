@@ -91,6 +91,8 @@ namespace gfx
     void                        set_indices         (mesh & m, GLenum mode, const unsigned int * data, size_t count);
 
     GLFWwindow *                create_window       (context & ctx,  const int2 & dims, const char * title, GLFWmonitor * monitor = nullptr);
+
+    template<class V, int N> void set_attribute(mesh & m, int index, linalg::vec<float,N> V::* attribute) { set_attribute(m, index, N, GL_FLOAT, GL_FALSE, sizeof(V), &(static_cast<V*>(0)->*attribute)); }
 }
 
 // This type does not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.
