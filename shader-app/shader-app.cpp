@@ -111,12 +111,11 @@ int main(int argc, char * argv[]) try
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
 
     auto ctx = gfx::create_context();
-    auto vert_shader = compile_shader(*ctx, GL_VERTEX_SHADER, vert_shader_source);
-    auto frag_shader = compile_shader(*ctx, GL_FRAGMENT_SHADER, frag_shader_source);
-    auto program = gfx::link_program(*ctx, {vert_shader, frag_shader});
-
-    GLuint diffuse_tex = load_texture(*ctx, "pattern_191_diffuse.png");
-    GLuint normal_tex = load_texture(*ctx, "pattern_191_normal.png");
+    auto vert_shader = compile_shader(ctx, GL_VERTEX_SHADER, vert_shader_source);
+    auto frag_shader = compile_shader(ctx, GL_FRAGMENT_SHADER, frag_shader_source);
+    auto program = gfx::link_program(ctx, {vert_shader, frag_shader});
+    auto diffuse_tex = load_texture(ctx, "pattern_191_diffuse.png");
+    auto normal_tex = load_texture(ctx, "pattern_191_normal.png");
 
     auto win = gfx::create_window(*ctx, {1280, 720}, "Shader App");
     std::vector<input_event> events;
@@ -133,8 +132,7 @@ int main(int argc, char * argv[]) try
         {"Box 2", &box, g_box, {+1,0,0}, {0.5f,0.5f,1}}
     };
 
-    auto per_scene = get_uniform_block_description(*program, "PerScene");
-    auto per_object = get_uniform_block_description(*program, "PerObject");
+    auto * per_scene = get_program_desc(*program).get_block_desc("PerScene");
 
     renderer the_renderer;
 
@@ -196,7 +194,7 @@ int main(int argc, char * argv[]) try
         for(auto & obj : objects)
         {   
             const float4x4 model = translation_matrix(obj.position);
-            list.begin_object(obj.dmesh, program, &per_object);
+            list.begin_object(obj.dmesh, program);
             list.set_uniform("u_model", model);
             list.set_uniform("u_modelIT", inverse(transpose(model)));
             list.set_uniform("u_diffuseMtl", obj.diffuse);
@@ -208,19 +206,14 @@ int main(int argc, char * argv[]) try
         glViewport(0, 0, fw, fh);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        std::vector<byte> buffer(per_scene.data_size);
-        per_scene.set_uniform(buffer.data(), "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
-        per_scene.set_uniform(buffer.data(), "u_eyePos", cam.position);
-        per_scene.set_uniform(buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));       
-        the_renderer.set_scene_uniforms(per_scene, buffer.data());
+        std::vector<byte> buffer(per_scene->data_size);
+        per_scene->set_uniform(buffer.data(), "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
+        per_scene->set_uniform(buffer.data(), "u_eyePos", cam.position);
+        per_scene->set_uniform(buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));       
+        the_renderer.set_scene_uniforms(*per_scene, buffer.data());
 
-        glUseProgram(get_name(*program));
-        glActiveTexture(GL_TEXTURE0 + 0);
-        glBindTexture(GL_TEXTURE_2D, diffuse_tex);
-        glUniform1i(glGetUniformLocation(get_name(*program), "u_diffuseTex"), 0);
-        glActiveTexture(GL_TEXTURE0 + 1);
-        glBindTexture(GL_TEXTURE_2D, normal_tex);
-        glUniform1i(glGetUniformLocation(get_name(*program), "u_normalTex"), 1);
+        gfx::bind_texture(0, *program, "u_diffuseTex", *diffuse_tex);
+        gfx::bind_texture(1, *program, "u_normalTex", *normal_tex);
 
         the_renderer.draw_objects(list);
 

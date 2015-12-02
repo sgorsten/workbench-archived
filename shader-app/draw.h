@@ -8,39 +8,17 @@
 #include <cstdint>
 #include <vector>
 #include <memory>
+
 #include <GL\glew.h>
 
 #include "linalg.h"
 using namespace linalg::aliases;
 
-struct GLFWwindow;
-struct GLFWmonitor;
-
-namespace gfx
-{
-    struct context;
-    struct shader;
-    struct program;
-    struct mesh;
-
-    std::shared_ptr<context>    create_context  ();
-    std::shared_ptr<shader>     compile_shader  (context & ctx, GLenum type, const char * source);
-    std::shared_ptr<program>    link_program    (context & ctx, std::initializer_list<std::shared_ptr<shader>> shaders);
-    GLuint                      load_texture    (context & ctx, const char * filename);
-
-    std::shared_ptr<mesh>       create_mesh     (std::shared_ptr<context> ctx);
-    void                        set_vertices    (mesh & m, const void * data, size_t size);
-    void                        set_attribute   (mesh & m, int index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid * pointer);
-    void                        set_indices     (mesh & m, GLenum mode, const unsigned int * data, size_t count);
-
-    GLFWwindow *                create_window   (context & ctx,  const int2 & dims, const char * title, GLFWmonitor * monitor = nullptr);
-}
-
-GLuint get_name(const gfx::program & p);
-
 enum class byte : uint8_t {};
 enum class native_type { float_, double_, int_, unsigned_int, bool_ };
 struct gl_data_type { GLenum gl_type; native_type component_type; int num_rows, num_cols; };
+struct gl_sampler_type { GLenum gl_type; native_type component_type; GLenum target; bool shadow; };
+struct sampler_desc { std::string name; const gl_sampler_type * sampler_type; int location, array_size; };
 struct uniform_desc
 {
     std::string name;
@@ -76,13 +54,47 @@ struct uniform_block_desc
     const uniform_desc * get_uniform_desc(const char * name) const { for(auto & u : uniforms) if(u.name == name) return &u; return nullptr; }
     template<class T> void set_uniform(byte buffer[], const char * name, const T & value) const { if(auto * u = get_uniform_desc(name)) u->set_value(buffer, value); }
 };
+struct program_desc
+{
+    std::vector<uniform_block_desc> blocks;
+    std::vector<sampler_desc> samplers;
+    const uniform_block_desc * get_block_desc(const char * name) const { for(auto & b : blocks) if(b.name == name) return &b; return nullptr; }
+    const sampler_desc * get_sampler_desc(const char * name) const { for(auto & s : samplers) if(s.name == name) return &s; return nullptr; }
+};
 
-const gl_data_type * get_gl_data_type(GLenum gl_type);
-uniform_block_desc get_uniform_block_description(const gfx::program & program, const char * name);
 std::ostream & operator << (std::ostream & o, const gl_data_type & t);
 std::ostream & operator << (std::ostream & o, const uniform_desc & u);
 
-GLuint load_texture(const char * filename);
+struct GLFWwindow;
+struct GLFWmonitor;
+
+namespace gfx
+{
+    struct context;
+    struct shader;
+    struct program;
+    struct texture;
+    struct mesh;
+
+    std::shared_ptr<context>    create_context      ();
+
+    std::shared_ptr<shader>     compile_shader      (std::shared_ptr<context> ctx, GLenum type, const char * source);
+    std::shared_ptr<program>    link_program        (std::shared_ptr<context> ctx, std::initializer_list<std::shared_ptr<shader>> shaders);
+    const program_desc &        get_program_desc    (const program & p);
+
+    std::shared_ptr<texture>    load_texture        (std::shared_ptr<context> ctx, const char * filename);
+
+    std::shared_ptr<mesh>       create_mesh         (std::shared_ptr<context> ctx);
+    void                        set_vertices        (mesh & m, const void * data, size_t size);
+    void                        set_attribute       (mesh & m, int index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid * pointer);
+    void                        set_indices         (mesh & m, GLenum mode, const unsigned int * data, size_t count);
+
+    GLFWwindow *                create_window       (context & ctx,  const int2 & dims, const char * title, GLFWmonitor * monitor = nullptr);
+
+    void bind_texture(int unit, program & p, const char * name, const texture & t);
+}
+
+GLuint get_name(const gfx::program & p);
 
 // This type does not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.
 class draw_list
@@ -99,7 +111,7 @@ public:
     const std::vector<byte> & get_buffer() const { return buffer; }
     const std::vector<object> & get_objects() const { return objects; }
 
-    void begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program, const uniform_block_desc * block);
+    void begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program);
     template<class T> void set_uniform(const char * name, const T & value)
     {
         const auto & object = objects.back();

@@ -5,11 +5,17 @@
 
 #include <vector>
 #include <string>
+#include <map>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include <GLFW\glfw3.h>
+
+static const gl_data_type * get_gl_data_type(GLenum gl_type);
+static const gl_sampler_type * get_gl_sampler_type(GLenum gl_type);
+
+
 
 struct gfx::context
 {
@@ -33,18 +39,20 @@ std::shared_ptr<gfx::context> gfx::create_context()
     return ctx;
 }
 
-// std::shared_ptr<program>    link_program    (context & ctx, std::initializer_list<shader> shaders);
+
 
 struct gfx::shader
 {
-    GLuint object_name = 0;
+    std::shared_ptr<gfx::context> ctx;
+    GLuint object_name;
+    shader(std::shared_ptr<gfx::context> ctx) : ctx(move(ctx)), object_name() {}
     ~shader() { if(object_name) glDeleteShader(object_name); }
 };
 
-std::shared_ptr<gfx::shader> gfx::compile_shader(context & ctx, GLenum type, const char * source)
+std::shared_ptr<gfx::shader> gfx::compile_shader(std::shared_ptr<context> ctx, GLenum type, const char * source)
 {
-    glfwMakeContextCurrent(ctx.hidden);
-    auto s = std::make_shared<shader>();
+    glfwMakeContextCurrent(ctx->hidden);
+    auto s = std::make_shared<shader>(ctx);
     s->object_name = glCreateShader(type);
     glShaderSource(s->object_name, 1, &source, nullptr);
     glCompileShader(s->object_name);
@@ -62,23 +70,26 @@ std::shared_ptr<gfx::shader> gfx::compile_shader(context & ctx, GLenum type, con
     return s;
 }
 
+
+
 struct gfx::program
 {
-    GLuint object_name = 0;
+    std::shared_ptr<gfx::context> ctx;
+    GLuint object_name;
+    program_desc desc;
+    program(std::shared_ptr<gfx::context> ctx) : ctx(move(ctx)), object_name() {}
     ~program() { if(object_name) glDeleteProgram(object_name); }
 };
 
-GLuint get_name(const gfx::program & p) { return p.object_name; }
-
-std::shared_ptr<gfx::program> gfx::link_program(context & ctx, std::initializer_list<std::shared_ptr<shader>> shaders)
+std::shared_ptr<gfx::program> gfx::link_program(std::shared_ptr<context> ctx, std::initializer_list<std::shared_ptr<shader>> shaders)
 {
-    glfwMakeContextCurrent(ctx.hidden);
-    auto p = std::make_shared<gfx::program>();
+    glfwMakeContextCurrent(ctx->hidden);
+    auto p = std::make_shared<gfx::program>(ctx);
     p->object_name = glCreateProgram();
     for(auto s : shaders) glAttachShader(p->object_name, s->object_name);
     glLinkProgram(p->object_name);
 
-    GLint status, length;
+    GLint status, length, count;
     glGetProgramiv(p->object_name, GL_LINK_STATUS, &status);
     if(status == GL_FALSE)
     {
@@ -88,17 +99,79 @@ std::shared_ptr<gfx::program> gfx::link_program(context & ctx, std::initializer_
         throw std::runtime_error("GLSL link error: " + log);
     }
 
+    // Obtain uniform block metadata
+    glGetProgramiv(p->object_name, GL_ACTIVE_UNIFORM_BLOCKS, &count);
+    glGetProgramiv(p->object_name, GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH, &length);
+    std::vector<char> name_buffer(length);
+    for(GLuint i=0; i<count; ++i)
+    {
+        GLint binding, data_size;
+        glGetActiveUniformBlockiv(p->object_name, i, GL_UNIFORM_BLOCK_BINDING, &binding);
+        glGetActiveUniformBlockiv(p->object_name, i, GL_UNIFORM_BLOCK_DATA_SIZE, &data_size);
+        glGetActiveUniformBlockName(p->object_name, i, length, nullptr, name_buffer.data());
+        p->desc.blocks.push_back({name_buffer.data(), i, binding, data_size});
+    }
+
+    // Obtain uniform metadata
+    glGetProgramiv(p->object_name, GL_ACTIVE_UNIFORMS, &count);
+    glGetProgramiv(p->object_name, GL_ACTIVE_UNIFORM_MAX_LENGTH, &length);
+    name_buffer.resize(length);
+    for(GLuint i=0; i<count; ++i)
+    {
+        GLint type=0, size=0;
+        glGetActiveUniformsiv(p->object_name, 1, &i, GL_UNIFORM_TYPE, &type);
+        glGetActiveUniformsiv(p->object_name, 1, &i, GL_UNIFORM_SIZE, &size);
+        glGetActiveUniformName(p->object_name, i, name_buffer.size(), nullptr, name_buffer.data());
+        if(auto * s = get_gl_sampler_type(type))
+        {
+            p->desc.samplers.push_back({name_buffer.data(), s, glGetUniformLocation(p->object_name, name_buffer.data()), size});
+            continue;
+        }
+
+        // Data uniforms must belong to a uniform block
+        GLint block_index=GL_INVALID_INDEX, offset=0, array_stride=0, matrix_stride=0, is_row_major=0;
+        glGetActiveUniformsiv(p->object_name, 1, &i, GL_UNIFORM_BLOCK_INDEX, &block_index);
+        if(block_index == GL_INVALID_INDEX) continue;
+        glGetActiveUniformsiv(p->object_name, 1, &i, GL_UNIFORM_OFFSET, &offset);
+        glGetActiveUniformsiv(p->object_name, 1, &i, GL_UNIFORM_ARRAY_STRIDE, &array_stride);
+        glGetActiveUniformsiv(p->object_name, 1, &i, GL_UNIFORM_MATRIX_STRIDE, &matrix_stride);
+        glGetActiveUniformsiv(p->object_name, 1, &i, GL_UNIFORM_IS_ROW_MAJOR, &is_row_major);
+        if(auto * t = get_gl_data_type(type))
+        {
+            uniform_desc u;
+            u.name = name_buffer.data();
+            u.data_type = t;
+            u.location = offset;
+            u.stride.x = t->component_type == native_type::double_ ? 8 : 4;
+            u.stride.y = matrix_stride;
+            u.stride.z = array_stride;
+            if(is_row_major) std::swap(u.stride.x, u.stride.y);
+            p->desc.blocks[block_index].uniforms.push_back(u);
+        }
+    }
     return p;
 }
 
-GLuint gfx::load_texture(context & ctx, const char * filename)
+const program_desc & gfx::get_program_desc(const program & p) { return p.desc; }
+
+
+
+struct gfx::texture
 {
-    glfwMakeContextCurrent(ctx.hidden);
+    std::shared_ptr<gfx::context> ctx;
+    GLuint object_name;
+    texture(std::shared_ptr<gfx::context> ctx) : ctx(move(ctx)), object_name() {}
+    ~texture() { if(object_name) glDeleteTextures(1, &object_name); }
+};
+
+std::shared_ptr<gfx::texture> gfx::load_texture(std::shared_ptr<context> ctx, const char * filename)
+{
+    glfwMakeContextCurrent(ctx->hidden);
     int x, y, comp;
     auto image = stbi_load(filename, &x, &y, &comp, 0);
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
+    auto tex = std::make_shared<gfx::texture>(ctx);
+    glGenTextures(1, &tex->object_name);
+    glBindTexture(GL_TEXTURE_2D, tex->object_name);
     switch(comp)
     {
     case 1: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE,       GL_UNSIGNED_BYTE, image); break;
@@ -112,6 +185,8 @@ GLuint gfx::load_texture(context & ctx, const char * filename)
     stbi_image_free(image);  
     return tex;
 }
+
+
 
 struct gfx::mesh
 {
@@ -161,6 +236,15 @@ GLFWwindow * gfx::create_window(context & ctx,  const int2 & dims, const char * 
     return glfwCreateWindow(dims.x, dims.y, title, monitor, ctx.hidden);
 }
 
+void gfx::bind_texture(int unit, program & p, const char * name, const texture & t)
+{
+    //glfwMakeContextCurrent(p.ctx->hidden);
+    glUseProgram(p.object_name);
+    glUniform1i(glGetUniformLocation(p.object_name, name), unit);
+    glActiveTexture(GL_TEXTURE0 + unit);
+    glBindTexture(GL_TEXTURE_2D, t.object_name);    
+}                  
+
 std::ostream & operator << (std::ostream & o, const gl_data_type & t)
 {
     if(t.num_cols > 1) // Matrix
@@ -200,145 +284,9 @@ std::ostream & operator << (std::ostream & o, const uniform_desc & u)
     return o << " @ " << u.location << ':' << u.stride.x << ',' << u.stride.y << ',' << u.stride.z;
 }
 
-static const gl_data_type gl_data_types[] = 
+void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program)
 {
-    {GL_FLOAT,             native_type::float_,       1, 1}, // float
-    {GL_FLOAT_VEC2,        native_type::float_,       2, 1}, // vec2
-    {GL_FLOAT_VEC3,        native_type::float_,       3, 1}, // vec3
-    {GL_FLOAT_VEC4,        native_type::float_,       4, 1}, // vec4
-    {GL_DOUBLE,            native_type::double_,      1, 1}, // double
-    {GL_DOUBLE_VEC2,       native_type::double_,      2, 1}, // dvec2
-    {GL_DOUBLE_VEC3,       native_type::double_,      3, 1}, // dvec3
-    {GL_DOUBLE_VEC4,       native_type::double_,      4, 1}, // dvec4
-    {GL_INT,               native_type::int_,         1, 1}, // int
-    {GL_INT_VEC2,          native_type::int_,         2, 1}, // ivec2
-    {GL_INT_VEC3,          native_type::int_,         3, 1}, // ivec3
-    {GL_INT_VEC4,          native_type::int_,         4, 1}, // ivec4
-    {GL_UNSIGNED_INT,      native_type::unsigned_int, 1, 1}, // unsigned int
-    {GL_UNSIGNED_INT_VEC2, native_type::unsigned_int, 2, 1}, // uvec2
-    {GL_UNSIGNED_INT_VEC3, native_type::unsigned_int, 3, 1}, // uvec3
-    {GL_UNSIGNED_INT_VEC4, native_type::unsigned_int, 4, 1}, // uvec4
-    {GL_BOOL,              native_type::bool_,        1, 1}, // bool
-    {GL_BOOL_VEC2,         native_type::bool_,        2, 1}, // bvec2
-    {GL_BOOL_VEC3,         native_type::bool_,        3, 1}, // bvec3
-    {GL_BOOL_VEC4,         native_type::bool_,        4, 1}, // bvec4
-    {GL_FLOAT_MAT2,        native_type::float_,       2, 2}, // mat2
-    {GL_FLOAT_MAT3,        native_type::float_,       3, 3}, // mat3
-    {GL_FLOAT_MAT4,        native_type::float_,       4, 4}, // mat4
-    {GL_FLOAT_MAT2x3,      native_type::float_,       3, 2}, // mat2x3
-    {GL_FLOAT_MAT2x4,      native_type::float_,       4, 2}, // mat2x4
-    {GL_FLOAT_MAT3x2,      native_type::float_,       2, 3}, // mat3x2
-    {GL_FLOAT_MAT3x4,      native_type::float_,       4, 3}, // mat3x4
-    {GL_FLOAT_MAT4x2,      native_type::float_,       2, 4}, // mat4x2
-    {GL_FLOAT_MAT4x3,      native_type::float_,       3, 4}, // mat4x3
-    {GL_DOUBLE_MAT2,       native_type::double_,      2, 2}, // dmat2
-    {GL_DOUBLE_MAT3,       native_type::double_,      3, 3}, // dmat3
-    {GL_DOUBLE_MAT4,       native_type::double_,      4, 4}, // dmat4
-    {GL_DOUBLE_MAT2x3,     native_type::double_,      3, 2}, // dmat2x3
-    {GL_DOUBLE_MAT2x4,     native_type::double_,      4, 2}, // dmat2x4
-    {GL_DOUBLE_MAT3x2,     native_type::double_,      2, 3}, // dmat3x2
-    {GL_DOUBLE_MAT3x4,     native_type::double_,      4, 3}, // dmat3x4
-    {GL_DOUBLE_MAT4x2,     native_type::double_,      2, 4}, // dmat4x2
-    {GL_DOUBLE_MAT4x3,     native_type::double_,      3, 4}, // dmat4x3
-};
-const gl_data_type * get_gl_data_type(GLenum gl_type)
-{
-    for(auto & type : gl_data_types)
-    {
-        if(type.gl_type == gl_type)
-        {
-            return &type;
-        }
-    }
-    return nullptr;
-}
-
-uniform_block_desc get_uniform_block_description(const gfx::program & program, const char * name)
-{
-    GLuint block_index = glGetUniformBlockIndex(program.object_name, name);
-    if(block_index == GL_INVALID_INDEX) throw std::logic_error("missing uniform block");
-
-    GLint binding, data_size;
-    glGetActiveUniformBlockiv(program.object_name, block_index, GL_UNIFORM_BLOCK_BINDING, &binding);
-    glGetActiveUniformBlockiv(program.object_name, block_index, GL_UNIFORM_BLOCK_DATA_SIZE, &data_size);
-    uniform_block_desc block = {name, block_index, binding, data_size};
-
-    GLint num_uniforms, max_name_length;
-    glGetProgramiv(program.object_name, GL_ACTIVE_UNIFORMS, &num_uniforms);
-    glGetProgramiv(program.object_name, GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_name_length);
-    std::vector<char> name_buffer(max_name_length);
-    for(GLuint uniform_index=0; uniform_index<num_uniforms; ++uniform_index)
-    {
-        GLint uniform_block_index=GL_INVALID_INDEX;
-        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_BLOCK_INDEX, &uniform_block_index);
-        if(uniform_block_index != block_index) continue;
-
-        GLint type=0, size=0, offset=0, array_stride=0, matrix_stride=0, is_row_major=0;
-        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_TYPE, &type);
-        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_SIZE, &size);
-        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_OFFSET, &offset);
-        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_ARRAY_STRIDE, &array_stride);
-        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_MATRIX_STRIDE, &matrix_stride);
-        glGetActiveUniformsiv(program.object_name, 1, &uniform_index, GL_UNIFORM_IS_ROW_MAJOR, &is_row_major);
-        glGetActiveUniformName(program.object_name, uniform_index, name_buffer.size(), nullptr, name_buffer.data());
-        if(auto * t = get_gl_data_type(type))
-        {
-            uniform_desc u;
-            u.name = name_buffer.data();
-            u.data_type = t;
-            u.location = offset;
-            u.stride.x = t->component_type == native_type::double_ ? 8 : 4;
-            u.stride.y = matrix_stride;
-            u.stride.z = array_stride;
-            if(is_row_major) std::swap(u.stride.x, u.stride.y);
-            block.uniforms.push_back(u);
-        }
-        //switch(type)
-        //{
-        //case GL_SAMPLER_1D:                                 std::cout << "sampler1D"; break;
-        //case GL_SAMPLER_2D:                                 std::cout << "sampler2D"; break;
-        //case GL_SAMPLER_3D:                                 std::cout << "sampler3D"; break;
-        //case GL_SAMPLER_CUBE:                               std::cout << "samplerCube"; break;
-        //case GL_SAMPLER_1D_SHADOW:                          std::cout << "sampler1DShadow"; break;
-        //case GL_SAMPLER_2D_SHADOW:                          std::cout << "sampler2DShadow"; break;
-        //case GL_SAMPLER_1D_ARRAY:                           std::cout << "sampler1DArray"; break;
-        //case GL_SAMPLER_2D_ARRAY:                           std::cout << "sampler2DArray"; break;
-        //case GL_SAMPLER_1D_ARRAY_SHADOW:                    std::cout << "sampler1DArrayShadow"; break;
-        //case GL_SAMPLER_2D_ARRAY_SHADOW:                    std::cout << "sampler2DArrayShadow"; break;
-        //case GL_SAMPLER_2D_MULTISAMPLE:                     std::cout << "sampler2DMS"; break;
-        //case GL_SAMPLER_2D_MULTISAMPLE_ARRAY:               std::cout << "sampler2DMSArray"; break;
-        //case GL_SAMPLER_CUBE_SHADOW:                        std::cout << "samplerCubeShadow"; break;
-        //case GL_SAMPLER_BUFFER:                             std::cout << "samplerBuffer"; break;
-        //case GL_SAMPLER_2D_RECT:                            std::cout << "sampler2DRect"; break;
-        //case GL_SAMPLER_2D_RECT_SHADOW:                     std::cout << "sampler2DRectShadow"; break;
-        //case GL_INT_SAMPLER_1D:                             std::cout << "isampler1D"; break;
-        //case GL_INT_SAMPLER_2D:                             std::cout << "isampler2D"; break;
-        //case GL_INT_SAMPLER_3D:                             std::cout << "isampler3D"; break;
-        //case GL_INT_SAMPLER_CUBE:                           std::cout << "isamplerCube"; break;
-        //case GL_INT_SAMPLER_1D_ARRAY:                       std::cout << "isampler1DArray"; break;
-        //case GL_INT_SAMPLER_2D_ARRAY:                       std::cout << "isampler2DArray"; break;
-        //case GL_INT_SAMPLER_2D_MULTISAMPLE:                 std::cout << "isampler2DMS"; break;
-        //case GL_INT_SAMPLER_2D_MULTISAMPLE_ARRAY:           std::cout << "isampler2DMSArray"; break;
-        //case GL_INT_SAMPLER_BUFFER:                         std::cout << "isamplerBuffer"; break;
-        //case GL_INT_SAMPLER_2D_RECT:                        std::cout << "isampler2DRect"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_1D:                    std::cout << "usampler1D"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_2D:                    std::cout << "usampler2D"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_3D:                    std::cout << "usampler3D"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_CUBE:                  std::cout << "usamplerCube"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_1D_ARRAY:              std::cout << "usampler2DArray"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:              std::cout << "usampler2DArray"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE:        std::cout << "usampler2DMS"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY:  std::cout << "usampler2DMSArray"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_BUFFER:                std::cout << "usamplerBuffer"; break;
-        //case GL_UNSIGNED_INT_SAMPLER_2D_RECT:               std::cout << "usampler2DRect"; break;
-        //}
-    }
-
-    return block;
-}
-
-void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program, const uniform_block_desc * block)
-{
+    const uniform_block_desc * block = program->desc.get_block_desc("PerObject");
     objects.push_back({mesh, program, block, buffer.size()});
     buffer.resize(buffer.size() + block->data_size);
 }
@@ -398,4 +346,102 @@ void renderer::draw_objects(const draw_list & list)
 
         glDrawElements(current_mesh->primitive_mode, current_mesh->element_count, GL_UNSIGNED_INT, 0);
     }   
+}
+
+const gl_data_type * get_gl_data_type(GLenum gl_type)
+{
+    static const gl_data_type gl_data_types[] = 
+    {
+        {GL_FLOAT,             native_type::float_,       1, 1}, // float
+        {GL_FLOAT_VEC2,        native_type::float_,       2, 1}, // vec2
+        {GL_FLOAT_VEC3,        native_type::float_,       3, 1}, // vec3
+        {GL_FLOAT_VEC4,        native_type::float_,       4, 1}, // vec4
+        {GL_DOUBLE,            native_type::double_,      1, 1}, // double
+        {GL_DOUBLE_VEC2,       native_type::double_,      2, 1}, // dvec2
+        {GL_DOUBLE_VEC3,       native_type::double_,      3, 1}, // dvec3
+        {GL_DOUBLE_VEC4,       native_type::double_,      4, 1}, // dvec4
+        {GL_INT,               native_type::int_,         1, 1}, // int
+        {GL_INT_VEC2,          native_type::int_,         2, 1}, // ivec2
+        {GL_INT_VEC3,          native_type::int_,         3, 1}, // ivec3
+        {GL_INT_VEC4,          native_type::int_,         4, 1}, // ivec4
+        {GL_UNSIGNED_INT,      native_type::unsigned_int, 1, 1}, // unsigned int
+        {GL_UNSIGNED_INT_VEC2, native_type::unsigned_int, 2, 1}, // uvec2
+        {GL_UNSIGNED_INT_VEC3, native_type::unsigned_int, 3, 1}, // uvec3
+        {GL_UNSIGNED_INT_VEC4, native_type::unsigned_int, 4, 1}, // uvec4
+        {GL_BOOL,              native_type::bool_,        1, 1}, // bool
+        {GL_BOOL_VEC2,         native_type::bool_,        2, 1}, // bvec2
+        {GL_BOOL_VEC3,         native_type::bool_,        3, 1}, // bvec3
+        {GL_BOOL_VEC4,         native_type::bool_,        4, 1}, // bvec4
+        {GL_FLOAT_MAT2,        native_type::float_,       2, 2}, // mat2
+        {GL_FLOAT_MAT3,        native_type::float_,       3, 3}, // mat3
+        {GL_FLOAT_MAT4,        native_type::float_,       4, 4}, // mat4
+        {GL_FLOAT_MAT2x3,      native_type::float_,       3, 2}, // mat2x3
+        {GL_FLOAT_MAT2x4,      native_type::float_,       4, 2}, // mat2x4
+        {GL_FLOAT_MAT3x2,      native_type::float_,       2, 3}, // mat3x2
+        {GL_FLOAT_MAT3x4,      native_type::float_,       4, 3}, // mat3x4
+        {GL_FLOAT_MAT4x2,      native_type::float_,       2, 4}, // mat4x2
+        {GL_FLOAT_MAT4x3,      native_type::float_,       3, 4}, // mat4x3
+        {GL_DOUBLE_MAT2,       native_type::double_,      2, 2}, // dmat2
+        {GL_DOUBLE_MAT3,       native_type::double_,      3, 3}, // dmat3
+        {GL_DOUBLE_MAT4,       native_type::double_,      4, 4}, // dmat4
+        {GL_DOUBLE_MAT2x3,     native_type::double_,      3, 2}, // dmat2x3
+        {GL_DOUBLE_MAT2x4,     native_type::double_,      4, 2}, // dmat2x4
+        {GL_DOUBLE_MAT3x2,     native_type::double_,      2, 3}, // dmat3x2
+        {GL_DOUBLE_MAT3x4,     native_type::double_,      4, 3}, // dmat3x4
+        {GL_DOUBLE_MAT4x2,     native_type::double_,      2, 4}, // dmat4x2
+        {GL_DOUBLE_MAT4x3,     native_type::double_,      3, 4}, // dmat4x3
+    };
+    for(auto & type : gl_data_types)
+    {
+        if(type.gl_type == gl_type) return &type;
+    }
+    return nullptr;
+}
+
+const gl_sampler_type * get_gl_sampler_type(GLenum gl_type)
+{
+    static const gl_sampler_type gl_sampler_types[] = 
+    {
+        {GL_SAMPLER_1D,                                native_type::float_,       GL_TEXTURE_1D, false},
+        {GL_SAMPLER_2D,                                native_type::float_,       GL_TEXTURE_2D, false},
+        {GL_SAMPLER_3D,                                native_type::float_,       GL_TEXTURE_3D, false},
+        {GL_SAMPLER_CUBE,                              native_type::float_,       GL_TEXTURE_CUBE_MAP, false},
+        {GL_SAMPLER_1D_SHADOW,                         native_type::float_,       GL_TEXTURE_1D, true},
+        {GL_SAMPLER_2D_SHADOW,                         native_type::float_,       GL_TEXTURE_2D, true},
+        {GL_SAMPLER_1D_ARRAY,                          native_type::float_,       GL_TEXTURE_1D_ARRAY, false},
+        {GL_SAMPLER_2D_ARRAY,                          native_type::float_,       GL_TEXTURE_2D_ARRAY, false},
+        {GL_SAMPLER_1D_ARRAY_SHADOW,                   native_type::float_,       GL_TEXTURE_1D_ARRAY, true},
+        {GL_SAMPLER_2D_ARRAY_SHADOW,                   native_type::float_,       GL_TEXTURE_2D_ARRAY, true},
+        {GL_SAMPLER_2D_MULTISAMPLE,                    native_type::float_,       GL_TEXTURE_2D_MULTISAMPLE, false},
+        {GL_SAMPLER_2D_MULTISAMPLE_ARRAY,              native_type::float_,       GL_TEXTURE_2D_MULTISAMPLE_ARRAY, false},
+        {GL_SAMPLER_CUBE_SHADOW,                       native_type::float_,       GL_TEXTURE_CUBE_MAP, true},
+        {GL_SAMPLER_BUFFER,                            native_type::float_,       GL_TEXTURE_BUFFER, false},
+        {GL_SAMPLER_2D_RECT,                           native_type::float_,       GL_TEXTURE_RECTANGLE, false},
+        {GL_SAMPLER_2D_RECT_SHADOW,                    native_type::float_,       GL_TEXTURE_RECTANGLE, true},
+        {GL_INT_SAMPLER_1D,                            native_type::int_,         GL_TEXTURE_1D, false},
+        {GL_INT_SAMPLER_2D,                            native_type::int_,         GL_TEXTURE_2D, false},
+        {GL_INT_SAMPLER_3D,                            native_type::int_,         GL_TEXTURE_3D, false},
+        {GL_INT_SAMPLER_CUBE,                          native_type::int_,         GL_TEXTURE_CUBE_MAP, false},
+        {GL_INT_SAMPLER_1D_ARRAY,                      native_type::int_,         GL_TEXTURE_1D_ARRAY, false},
+        {GL_INT_SAMPLER_2D_ARRAY,                      native_type::int_,         GL_TEXTURE_2D_ARRAY, false},
+        {GL_INT_SAMPLER_2D_MULTISAMPLE,                native_type::int_,         GL_TEXTURE_2D_MULTISAMPLE, false},
+        {GL_INT_SAMPLER_2D_MULTISAMPLE_ARRAY,          native_type::int_,         GL_TEXTURE_2D_MULTISAMPLE_ARRAY, false},
+        {GL_INT_SAMPLER_BUFFER,                        native_type::int_,         GL_TEXTURE_BUFFER, false},
+        {GL_INT_SAMPLER_2D_RECT,                       native_type::int_,         GL_TEXTURE_RECTANGLE, false},
+        {GL_UNSIGNED_INT_SAMPLER_1D,                   native_type::unsigned_int, GL_TEXTURE_1D, false},
+        {GL_UNSIGNED_INT_SAMPLER_2D,                   native_type::unsigned_int, GL_TEXTURE_2D, false},
+        {GL_UNSIGNED_INT_SAMPLER_3D,                   native_type::unsigned_int, GL_TEXTURE_3D, false},
+        {GL_UNSIGNED_INT_SAMPLER_CUBE,                 native_type::unsigned_int, GL_TEXTURE_CUBE_MAP, false},
+        {GL_UNSIGNED_INT_SAMPLER_1D_ARRAY,             native_type::unsigned_int, GL_TEXTURE_1D_ARRAY, false},
+        {GL_UNSIGNED_INT_SAMPLER_2D_ARRAY,             native_type::unsigned_int, GL_TEXTURE_2D_ARRAY, false},
+        {GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE,       native_type::unsigned_int, GL_TEXTURE_2D_MULTISAMPLE, false},
+        {GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY, native_type::unsigned_int, GL_TEXTURE_2D_MULTISAMPLE_ARRAY, false},
+        {GL_UNSIGNED_INT_SAMPLER_BUFFER,               native_type::unsigned_int, GL_TEXTURE_BUFFER, false},
+        {GL_UNSIGNED_INT_SAMPLER_2D_RECT,              native_type::unsigned_int, GL_TEXTURE_RECTANGLE, false},
+    };
+    for(auto & type : gl_sampler_types)
+    {
+        if(type.gl_type == gl_type) return &type;
+    }
+    return nullptr;
 }
