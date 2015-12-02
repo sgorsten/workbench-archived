@@ -68,6 +68,7 @@ std::ostream & operator << (std::ostream & o, const uniform_desc & u);
 struct GLFWwindow;
 struct GLFWmonitor;
 
+// This namespace abstracts over OpenGL, and provides reasonable object-oriented access
 namespace gfx
 {
     struct context;
@@ -80,7 +81,7 @@ namespace gfx
 
     std::shared_ptr<shader>     compile_shader      (std::shared_ptr<context> ctx, GLenum type, const char * source);
     std::shared_ptr<program>    link_program        (std::shared_ptr<context> ctx, std::initializer_list<std::shared_ptr<shader>> shaders);
-    const program_desc &        get_program_desc    (const program & p);
+    const program_desc &        get_desc            (const program & p);
 
     std::shared_ptr<texture>    load_texture        (std::shared_ptr<context> ctx, const char * filename);
 
@@ -120,12 +121,9 @@ public:
 
 class renderer
 {
-    GLuint scene_ubo, object_ubo;
+    GLuint scene_ubo=0, object_ubo=0;
 public:
-    renderer();
-
-    void set_scene_uniforms(const uniform_block_desc & block, const void * data);
-    void draw_objects(const draw_list & list);
+    void draw_scene(GLFWwindow * window, const uniform_block_desc * per_scene, const void * data, const draw_list & list);
 };
 
 #endif

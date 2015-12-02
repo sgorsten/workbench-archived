@@ -152,7 +152,7 @@ std::shared_ptr<gfx::program> gfx::link_program(std::shared_ptr<context> ctx, st
     return p;
 }
 
-const program_desc & gfx::get_program_desc(const program & p) { return p.desc; }
+const program_desc & gfx::get_desc(const program & p) { return p.desc; }
 
 
 
@@ -297,21 +297,23 @@ void draw_list::set_sampler(const char * name, std::shared_ptr<const gfx::textur
 
 
 
-renderer::renderer()
+void renderer::draw_scene(GLFWwindow * window, const uniform_block_desc * per_scene, const void * data, const draw_list & list)
 {
-    glGenBuffers(1, &scene_ubo);
-    glGenBuffers(1, &object_ubo);
-}
+    int fw, fh;
+    glfwGetFramebufferSize(window, &fw, &fh);
+    glfwMakeContextCurrent(window);
+    glViewport(0, 0, fw, fh);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-void renderer::set_scene_uniforms(const uniform_block_desc & block, const void * data)
-{
-    glBindBuffer(GL_UNIFORM_BUFFER, scene_ubo);
-    glBufferData(GL_UNIFORM_BUFFER, block.data_size, data, GL_STREAM_DRAW);
-    glBindBufferBase(GL_UNIFORM_BUFFER, block.binding, scene_ubo);
-}
+    if(per_scene)
+    {
+        if(!scene_ubo) glGenBuffers(1, &scene_ubo);
+        glBindBuffer(GL_UNIFORM_BUFFER, scene_ubo);
+        glBufferData(GL_UNIFORM_BUFFER, per_scene->data_size, data, GL_STREAM_DRAW);
+        glBindBufferBase(GL_UNIFORM_BUFFER, per_scene->binding, scene_ubo);
+    }
 
-void renderer::draw_objects(const draw_list & list)
-{
+    if(!object_ubo) glGenBuffers(1, &object_ubo);
     const byte * buffer = list.get_buffer().data();
     const gfx::program * current_program = nullptr;
     const gfx::mesh * current_mesh = nullptr;
@@ -359,7 +361,9 @@ void renderer::draw_objects(const draw_list & list)
         }
 
         glDrawElements(current_mesh->primitive_mode, current_mesh->element_count, GL_UNSIGNED_INT, 0);
-    }   
+    }
+
+    glfwSwapBuffers(window);
 }
 
 const gl_data_type * get_gl_data_type(GLenum gl_type)

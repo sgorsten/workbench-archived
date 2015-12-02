@@ -132,8 +132,6 @@ int main(int argc, char * argv[]) try
         {"Box 2", &box, g_box, {+1,0,0}, {0.5f,0.5f,1}}
     };
 
-    auto * per_scene = get_program_desc(*program).get_block_desc("PerScene");
-
     renderer the_renderer;
 
     bool ml=0, mr=0, bf=0, bl=0, bb=0, br=0;
@@ -190,6 +188,14 @@ int main(int argc, char * argv[]) try
             if(mag2(move) > 0) cam.position += normalize(move) * (timestep * 8);
         }
 
+        int w, h;
+        glfwGetWindowSize(win, &w, &h);
+        const auto * per_scene = get_desc(*program).get_block_desc("PerScene");
+        std::vector<byte> scene_buffer(per_scene->data_size);
+        per_scene->set_uniform(scene_buffer.data(), "u_viewProj", cam.get_viewproj_matrix({0, 0, w, h}));
+        per_scene->set_uniform(scene_buffer.data(), "u_eyePos", cam.position);
+        per_scene->set_uniform(scene_buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));   
+
         draw_list list;
         for(auto & obj : objects)
         {   
@@ -202,21 +208,7 @@ int main(int argc, char * argv[]) try
             list.set_sampler("u_normalTex", normal_tex);
         }
 
-        int fw, fh;
-        glfwGetFramebufferSize(win, &fw, &fh);
-        glfwMakeContextCurrent(win);
-        glViewport(0, 0, fw, fh);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        std::vector<byte> buffer(per_scene->data_size);
-        per_scene->set_uniform(buffer.data(), "u_viewProj", cam.get_viewproj_matrix({0, 0, fw, fh}));
-        per_scene->set_uniform(buffer.data(), "u_eyePos", cam.position);
-        per_scene->set_uniform(buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));       
-        the_renderer.set_scene_uniforms(*per_scene, buffer.data());
-
-        the_renderer.draw_objects(list);
-
-        glfwSwapBuffers(win);
+        the_renderer.draw_scene(win, per_scene, scene_buffer.data(), list);
     }
     glfwTerminate();
     return EXIT_SUCCESS;
