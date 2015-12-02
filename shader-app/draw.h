@@ -90,11 +90,7 @@ namespace gfx
     void                        set_indices         (mesh & m, GLenum mode, const unsigned int * data, size_t count);
 
     GLFWwindow *                create_window       (context & ctx,  const int2 & dims, const char * title, GLFWmonitor * monitor = nullptr);
-
-    void bind_texture(int unit, program & p, const char * name, const texture & t);
 }
-
-GLuint get_name(const gfx::program & p);
 
 // This type does not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.
 class draw_list
@@ -103,12 +99,14 @@ class draw_list
     { 
         std::shared_ptr<const gfx::mesh> mesh;
         std::shared_ptr<const gfx::program> program;
-        const uniform_block_desc * block; size_t buffer_offset;
+        const uniform_block_desc * block; size_t buffer_offset, texture_offset;
     };
     std::vector<byte> buffer;
+    std::vector<std::shared_ptr<const gfx::texture>> textures;
     std::vector<object> objects;
 public:
     const std::vector<byte> & get_buffer() const { return buffer; }
+    const std::vector<std::shared_ptr<const gfx::texture>> & get_textures() const { return textures; }
     const std::vector<object> & get_objects() const { return objects; }
 
     void begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program);
@@ -117,6 +115,7 @@ public:
         const auto & object = objects.back();
         object.block->set_uniform(buffer.data() + object.buffer_offset, name, value);
     }
+    void set_sampler(const char * name, std::shared_ptr<const gfx::texture> texture);
 };
 
 class renderer

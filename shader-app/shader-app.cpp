@@ -198,6 +198,8 @@ int main(int argc, char * argv[]) try
             list.set_uniform("u_model", model);
             list.set_uniform("u_modelIT", inverse(transpose(model)));
             list.set_uniform("u_diffuseMtl", obj.diffuse);
+            list.set_sampler("u_diffuseTex", diffuse_tex);
+            list.set_sampler("u_normalTex", normal_tex);
         }
 
         int fw, fh;
@@ -211,9 +213,6 @@ int main(int argc, char * argv[]) try
         per_scene->set_uniform(buffer.data(), "u_eyePos", cam.position);
         per_scene->set_uniform(buffer.data(), "u_lightDir", normalize(float3(0.2f,1,0.1f)));       
         the_renderer.set_scene_uniforms(*per_scene, buffer.data());
-
-        gfx::bind_texture(0, *program, "u_diffuseTex", *diffuse_tex);
-        gfx::bind_texture(1, *program, "u_normalTex", *normal_tex);
 
         the_renderer.draw_objects(list);
 

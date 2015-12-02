@@ -234,16 +234,7 @@ void gfx::set_indices(mesh & m, GLenum mode, const unsigned int * data, size_t c
 GLFWwindow * gfx::create_window(context & ctx,  const int2 & dims, const char * title, GLFWmonitor * monitor)
 {
     return glfwCreateWindow(dims.x, dims.y, title, monitor, ctx.hidden);
-}
-
-void gfx::bind_texture(int unit, program & p, const char * name, const texture & t)
-{
-    //glfwMakeContextCurrent(p.ctx->hidden);
-    glUseProgram(p.object_name);
-    glUniform1i(glGetUniformLocation(p.object_name, name), unit);
-    glActiveTexture(GL_TEXTURE0 + unit);
-    glBindTexture(GL_TEXTURE_2D, t.object_name);    
-}                  
+}            
 
 std::ostream & operator << (std::ostream & o, const gl_data_type & t)
 {
@@ -287,9 +278,24 @@ std::ostream & operator << (std::ostream & o, const uniform_desc & u)
 void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program)
 {
     const uniform_block_desc * block = program->desc.get_block_desc("PerObject");
-    objects.push_back({mesh, program, block, buffer.size()});
+    objects.push_back({mesh, program, block, buffer.size(), textures.size()});
     buffer.resize(buffer.size() + block->data_size);
+    textures.resize(textures.size() + program->desc.samplers.size());
 }
+
+void draw_list::set_sampler(const char * name, std::shared_ptr<const gfx::texture> texture)
+{
+    auto & o = objects.back();
+    for(size_t i=0; i<o.program->desc.samplers.size(); ++i)
+    {
+        if(o.program->desc.samplers[i].name == name)
+        {
+            textures[o.texture_offset + i] = texture;
+        }
+    }
+}
+
+
 
 renderer::renderer()
 {
@@ -343,6 +349,14 @@ void renderer::draw_objects(const draw_list & list)
         glBindBuffer(GL_UNIFORM_BUFFER, object_ubo);
         glBufferData(GL_UNIFORM_BUFFER, object.block->data_size, buffer + object.buffer_offset, GL_DYNAMIC_DRAW);
         glBindBufferBase(GL_UNIFORM_BUFFER, object.block->binding, object_ubo);
+
+        for(int i=0; i<current_program->desc.samplers.size(); ++i)
+        {
+            const gfx::texture * tex = list.get_textures()[object.texture_offset+i].get();
+            glUniform1i(current_program->desc.samplers[i].location, i);
+            glActiveTexture(GL_TEXTURE0 + i);
+            glBindTexture(current_program->desc.samplers[i].sampler_type->target, tex ? tex->object_name : 0);
+        }
 
         glDrawElements(current_mesh->primitive_mode, current_mesh->element_count, GL_UNSIGNED_INT, 0);
     }   
