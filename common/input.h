@@ -29,5 +29,6 @@ struct input_event
 void install_input_callbacks(GLFWwindow * window, std::vector<input_event> & events);
 void emit_empty_event(GLFWwindow * window);
 void uninstall_input_callbacks(GLFWwindow * window);
+bool is_cursor_entered(GLFWwindow * window);
 
 #endif

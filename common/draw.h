@@ -118,7 +118,9 @@ public:
     const std::vector<byte> & get_buffer() const { return buffer; }
     const std::vector<std::shared_ptr<const gfx::texture>> & get_textures() const { return textures; }
 
-    template<class T> void set_uniform(const char * name, const T & value) { block->set_uniform(buffer.data(), name, value); }
+    const uniform_block_desc * get_block_desc() const { return block; }
+    byte * get_buffer_data() { return buffer.data(); }
+    template<class T> void set_uniform(const char * name, const T & value) { block->set_uniform(get_buffer_data(), name, value); }
     void set_sampler(const char * name, std::shared_ptr<const gfx::texture> texture);
 };
 

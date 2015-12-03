@@ -7,20 +7,30 @@ struct input_buffer
 {
     std::vector<input_event> & events;
     float2 cursor;
-    int mods;
+    int entered, mods;
 };
+
+bool is_cursor_entered(GLFWwindow * window)
+{
+    return reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(window))->entered;
+}
 
 void install_input_callbacks(GLFWwindow * window, std::vector<input_event> & events)
 {
     double2 cursor;
     glfwGetCursorPos(window, &cursor.x, &cursor.y);
-    glfwSetWindowUserPointer(window, new input_buffer{events, float2(cursor), 0});
+    glfwSetWindowUserPointer(window, new input_buffer{events, float2(cursor), 0, 0});
     glfwSetCursorPosCallback(window, [](GLFWwindow * win, double x, double y)
     {
         auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(win));
         const float2 cursor(double2(x,y));
         buffer->events.push_back({input::cursor_motion, cursor, buffer->mods, cursor - buffer->cursor, 0, 0, {0,0}, 0});
         buffer->cursor = cursor;
+    });
+    glfwSetCursorEnterCallback(window, [](GLFWwindow * win, int entered)
+    {
+        auto * buffer = reinterpret_cast<input_buffer *>(glfwGetWindowUserPointer(win));
+        buffer->entered = entered;
     });
     glfwSetKeyCallback(window, [](GLFWwindow * win, int key, int scancode, int action, int mods)
     {

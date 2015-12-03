@@ -18,7 +18,7 @@ const char * vert_shader_source = SHADER_PREAMBLE R"(
 layout(binding=2) uniform PerObject
 {
     mat4 u_model, u_modelIT;
-    vec3 u_diffuseMtl;
+    vec3 u_diffuseMtl, u_specularMtl;
 };
 
 layout(location = 0) in vec3 v_position; 
@@ -42,7 +42,7 @@ const char * frag_shader_source = SHADER_PREAMBLE R"(
 layout(binding=2) uniform PerObject
 {
     mat4 u_model, u_modelIT;
-    vec3 u_diffuseMtl;
+    vec3 u_diffuseMtl, u_specularMtl;
 };
 
 uniform sampler2D u_diffuseTex;
@@ -60,7 +60,7 @@ void main()
     vec3 diffuseMtl = texture2D(u_diffuseTex, texCoord).rgb * u_diffuseMtl;
     float diffuseLight = max(dot(lightDir, normalVec), 0);
     float specularLight = max(pow(dot(halfVec, normalVec), 1024), 0);
-    gl_FragColor = vec4(diffuseMtl * u_lightColor * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
+    gl_FragColor = vec4(diffuseMtl * u_lightColor * (diffuseLight + 0.1f) + u_specularMtl * specularLight, 1);
 })";
 
 const char * diffuse_vert_shader_source = SHADER_PREAMBLE R"(
@@ -179,16 +179,24 @@ struct static_mesh : public scene_object
     {
         int y0 = r.y0 + 4 - offset;
 
+        int id = 0;
         const int line_height = g.default_font.line_height + 4, mid = (r.x0 + r.x1) / 2;
         draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Name");
-        edit(g, 1, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
+        edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
         y0 += line_height + 4;
         draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
-        edit(g, 2, {mid + 2, y0, r.x1 - 4, y0 + line_height}, position);
+        edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, position);
         y0 += line_height + 4;
-        //draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Diffuse");
-        //edit(g, 3, {mid + 2, y0, r.x1 - 4, y0 + line_height}, diffuse);
-        //y0 += line_height + 4;
+        
+        for(auto & u : mat.get_block_desc()->uniforms)
+        {
+            if(u.data_type->gl_type == GL_FLOAT_VEC3)
+            {
+                draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,0.5f,1}, u.name);
+                edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, (float3 &)mat.get_buffer_data()[u.location]);
+                y0 += line_height + 4;
+            }
+        }
     }
 };
 
@@ -347,6 +355,7 @@ int main(int argc, char * argv[])
     mat.set_sampler("u_diffuseTex", load_texture(ctx, "pattern_191_diffuse.png"));
     mat.set_sampler("u_normalTex", load_texture(ctx, "pattern_191_normal.png"));
     mat.set_uniform("u_diffuseMtl", float3(0.8f));
+    mat.set_uniform("u_specularMtl", float3(0.5f));
     material mat2 = mat, mat3 = mat, mat4 = mat;
     mat2.set_uniform("u_diffuseMtl", float3(1,0.5f,0.5f));
     mat3.set_uniform("u_diffuseMtl", float3(0.5f,1,0.5f));
@@ -475,7 +484,7 @@ int main(int argc, char * argv[])
         object_properties_ui(g, 6, s.second, selection, offset1);
         g.end_frame();
 
-        switch(g.icon)
+        if(is_cursor_entered(win)) switch(g.icon)
         {
         case cursor_icon::arrow: glfwSetCursor(win, arrow_cursor); break;
         case cursor_icon::ibeam: glfwSetCursor(win, ibeam_cursor); break;

@@ -290,9 +290,7 @@ void material::set_sampler(const char * name, std::shared_ptr<const gfx::texture
 
 void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, const material & mat)
 {
-    auto program = mat.get_program();
-    const uniform_block_desc * block = program->desc.get_block_desc("PerObject");
-    objects.push_back({mesh, program, block, buffer.size(), textures.size()});
+    objects.push_back({mesh, mat.get_program(), mat.get_block_desc(), buffer.size(), textures.size()});
     buffer.insert(end(buffer), begin(mat.get_buffer()), end(mat.get_buffer()));
     textures.insert(end(textures), begin(mat.get_textures()), end(mat.get_textures()));
 }
