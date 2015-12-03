@@ -12,14 +12,9 @@
 #include <GLFW\glfw3.h>
 #pragma comment(lib, "opengl32.lib")
 
-const char * vert_shader_source = R"(#version 420
-layout(shared, binding=1) uniform PerScene 
-{
-    mat4 u_viewProj; 
-    vec3 u_eyePos;
-    vec3 u_lightPos, u_lightColor;
-};
+#define SHADER_PREAMBLE "#version 420\nlayout(shared, binding=1) uniform PerScene { mat4 u_viewProj; vec3 u_eyePos, u_lightPos, u_lightColor; };\n"
 
+const char * vert_shader_source = SHADER_PREAMBLE R"(
 layout(binding=2) uniform PerObject
 {
     mat4 u_model, u_modelIT;
@@ -43,14 +38,7 @@ void main()
     gl_Position = u_viewProj * vec4(position,1);
 })";
 
-const char * frag_shader_source = R"(#version 420
-layout(shared, binding=1) uniform PerScene 
-{
-    mat4 u_viewProj; 
-    vec3 u_eyePos;
-    vec3 u_lightPos, u_lightColor;
-};
-
+const char * frag_shader_source = SHADER_PREAMBLE R"(
 layout(binding=2) uniform PerObject
 {
     mat4 u_model, u_modelIT;
@@ -75,14 +63,7 @@ void main()
     gl_FragColor = vec4(diffuseMtl * u_lightColor * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
 })";
 
-const char * diffuse_vert_shader_source = R"(#version 420
-layout(shared, binding=1) uniform PerScene 
-{
-    mat4 u_viewProj; 
-    vec3 u_eyePos;
-    vec3 u_lightPos, u_lightColor;
-};
-
+const char * diffuse_vert_shader_source = SHADER_PREAMBLE R"(
 layout(binding=2) uniform PerObject
 {
     mat4 u_model, u_modelIT;
@@ -99,14 +80,7 @@ void main()
     gl_Position = u_viewProj * vec4(position,1);
 })";
 
-const char * diffuse_frag_shader_source = R"(#version 420
-layout(shared, binding=1) uniform PerScene 
-{
-    mat4 u_viewProj; 
-    vec3 u_eyePos;
-    vec3 u_lightPos, u_lightColor;
-};
-
+const char * diffuse_frag_shader_source = SHADER_PREAMBLE R"(
 layout(binding=2) uniform PerObject
 {
     mat4 u_model, u_modelIT;
@@ -118,12 +92,12 @@ void main()
 { 
     vec3 normalVec = normalize(normal);
     vec3 eyeVec = normalize(u_eyePos - position);
-    vec3 lightDir = normalize(u_lightPos - position);
+    vec3 lightDir = normalize(vec3(1,1,1));
     vec3 halfVec = normalize(lightDir + eyeVec);
 
-    float diffuseLight = max(dot(lightDir, normalVec), 0);
+    float diffuseLight = dot(lightDir, normalVec)*0.5f + 0.5f;
     float specularLight = max(pow(dot(halfVec, normalVec), 1024), 0);
-    gl_FragColor = vec4(u_diffuseMtl * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
+    gl_FragColor = vec4(u_diffuseMtl * diffuseLight + vec3(0.5) * specularLight, 1);
 })";
 
 void render_gui(const gui & g, GLuint sprite_tex)
