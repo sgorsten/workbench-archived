@@ -124,40 +124,6 @@ void main()
     gl_FragColor = vec4(u_diffuseMtl * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
 })";
 
-void gl_load_matrix(const float4x4 & m) { glLoadMatrixf(&m.x.x); }
-void gl_color(const float3 & v) { glColor3fv(begin(v)); }
-
-void render_geometry(const geometry_mesh & mesh)
-{
-    const GLenum states[] = {GL_VERTEX_ARRAY, GL_NORMAL_ARRAY, GL_TEXTURE_COORD_ARRAY};
-    for(auto s : states) glEnableClientState(s);
-    glVertexPointer(3, GL_FLOAT, sizeof(geometry_vertex), &mesh.vertices.data()->position);
-    glNormalPointer(GL_FLOAT, sizeof(geometry_vertex), &mesh.vertices.data()->normal);
-    glTexCoordPointer(2, GL_FLOAT, sizeof(geometry_vertex), &mesh.vertices.data()->texcoords);
-    glDrawElements(GL_TRIANGLES, mesh.triangles.size()*3, GL_UNSIGNED_INT, mesh.triangles.data());
-    for(auto s : states) glDisableClientState(s);
-}
-
-void render_gizmo(draw_list & list, const gui & g, const float4x4 & model, const std::shared_ptr<gfx::program> & program, const std::shared_ptr<layer> & layer, const std::shared_ptr<gfx::mesh> (& meshes)[6])
-{
-    const float3 colors[] = {
-        g.gizmode == gizmo_mode::translate_x ? float3(1,0.5f,0.5f) : float3(1,0,0),
-        g.gizmode == gizmo_mode::translate_y ? float3(0.5f,1,0.5f) : float3(0,1,0),
-        g.gizmode == gizmo_mode::translate_z ? float3(0.5f,0.5f,1) : float3(0,0,1),
-        g.gizmode == gizmo_mode::translate_yz ? float3(0.5f,1,1) : float3(0,1,1),
-        g.gizmode == gizmo_mode::translate_zx ? float3(1,0.5f,1) : float3(1,0,1),
-        g.gizmode == gizmo_mode::translate_xy ? float3(1,1,0.5f) : float3(1,1,0),   
-    };
-
-    for(int i=0; i<6; ++i)
-    {
-        list.begin_object(layer, meshes[i], program);
-        list.set_uniform("u_model", model);
-        list.set_uniform("u_modelIT", inverse(transpose(model)));
-        list.set_uniform("u_diffuseMtl", colors[i]);
-    }
-}
-
 void render_gui(const gui & g, GLuint sprite_tex)
 {
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); glOrtho(0, g.window_size.x, g.window_size.y, 0, -1, +1);
@@ -178,7 +144,23 @@ struct scene_object
 {
     std::string name;
     const geometry_mesh * mesh;
+    std::shared_ptr<const gfx::program> program;
+    std::shared_ptr<const gfx::texture> diffuse_tex;
+    std::shared_ptr<const gfx::texture> normal_tex;
+    std::shared_ptr<const gfx::mesh> gmesh;
     float3 position, diffuse;
+
+    float4x4 get_model_matrix() const { return translation_matrix(position); }
+    void draw(const std::shared_ptr<layer> & layer_objects, draw_list & list) const
+    {
+        const auto model = get_model_matrix();
+        list.begin_object(layer_objects, gmesh, program);
+        list.set_uniform("u_model", model);
+        list.set_uniform("u_modelIT", inverse(transpose(model)));
+        list.set_uniform("u_diffuseMtl", diffuse);
+        list.set_sampler("u_diffuseTex", diffuse_tex);
+        list.set_sampler("u_normalTex", normal_tex);
+    }
 };
 
 scene_object * raycast(const ray & ray, std::vector<scene_object> & objects)
@@ -261,9 +243,9 @@ void object_properties_ui(gui & g, int id, rect r, std::set<scene_object *> & se
     g.end_children();
 }
 
-rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, std::set<scene_object *> & selection)
+void viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, std::set<scene_object *> & selection)
 {
-    r = tabbed_frame(g, r, "Scene View");
+    g.viewport3d = r = tabbed_frame(g, r, "Scene View");
 
     if(!selection.empty())
     {
@@ -273,7 +255,7 @@ rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, s
         if(new_com != com) for(auto obj : selection) obj->position += new_com - com;
         g.end_children();
     }
-    if(g.is_child_pressed(id)) return r;
+    if(g.is_child_pressed(id)) return;
 
     if(g.check_click(id, r))
     {
@@ -304,7 +286,6 @@ rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, s
         if(g.br) move += qxdir(orientation);
         if(mag2(move) > 0) g.cam.position += normalize(move) * (g.timestep * 8);
     }
-    return r;
 }
 
 std::shared_ptr<gfx::mesh> make_draw_mesh(std::shared_ptr<gfx::context> ctx, const geometry_mesh & mesh)
@@ -332,19 +313,7 @@ int main(int argc, char * argv[])
     g.cam.position = {0,1.5f,4};
 
     sprites.prepare_texture();
-
-    auto ground = make_box_geometry({-4,-0.1f,-4}, {4,0,4});
-    generate_texcoords_cubic(ground, 0.5);
-    const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
-    const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
-    std::vector<scene_object> objects = {
-        {"Ground", &ground, {0,0,0}, {0.8,0.8,0.8}},
-        {"Box", &box, {-1,0,0}, {1,0.5f,0.5f}},
-        {"Cylinder", &cylinder, {0,0,0}, {0.5f,1,0.5f}},
-        {"Box 2", &box, {+1,0,0}, {0.5f,0.5f,1}}
-    };
-    std::set<scene_object *> selection;
-    
+   
     auto ctx = gfx::create_context();
     auto vert_shader = compile_shader(ctx, GL_VERTEX_SHADER, vert_shader_source);
     auto frag_shader = compile_shader(ctx, GL_FRAGMENT_SHADER, frag_shader_source);
@@ -352,38 +321,35 @@ int main(int argc, char * argv[])
     auto program2 = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
     auto diffuse_tex = load_texture(ctx, "pattern_191_diffuse.png");
     auto normal_tex = load_texture(ctx, "pattern_191_normal.png");
+
+    auto ground = make_box_geometry({-4,-0.1f,-4}, {4,0,4});
+    generate_texcoords_cubic(ground, 0.5);
+    const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
+    const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
     auto g_ground = make_draw_mesh(ctx, ground);
     auto g_box = make_draw_mesh(ctx, box);
     auto g_cylinder = make_draw_mesh(ctx, cylinder);
-    std::shared_ptr<gfx::mesh> g_gizmo_meshes[6];
-    for(int i=0; i<6; ++i) g_gizmo_meshes[i] = make_draw_mesh(ctx, g.gizmo_meshes[i]);
+
+    std::vector<scene_object> objects = {
+        {"Ground", &ground, program, diffuse_tex, normal_tex, g_ground, {0,0,0}, {0.8,0.8,0.8}},
+        {"Box", &box, program, diffuse_tex, normal_tex, g_box, {-1,0,0}, {1,0.5f,0.5f}},
+        {"Cylinder", &cylinder, program, diffuse_tex, normal_tex, g_cylinder, {0,0,0}, {0.5f,1,0.5f}},
+        {"Box 2", &box, program, diffuse_tex, normal_tex, g_box, {+1,0,0}, {0.5f,0.5f,1}}
+    };
+    std::set<scene_object *> selection;
+    
+    g.gizmo_res.layer = std::make_shared<layer>(layer{1, true});
+    g.gizmo_res.program = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
+    for(int i=0; i<6; ++i) g.gizmo_res.meshes[i] = make_draw_mesh(ctx, g.gizmo_res.geomeshes[i]);
+
     renderer the_renderer;
 
     auto layer_objects = std::make_shared<layer>(layer{0, true});
-    auto layer_gizmos = std::make_shared<layer>(layer{1, true});
 
     auto win = gfx::create_window(*ctx, {1280, 720}, "Basic Workbench App");
     std::vector<input_event> events;
     install_input_callbacks(win, events);
     glfwMakeContextCurrent(win);
-
-    float image[16][16];
-    for(int i=0; i<16; ++i)
-    {
-        for(int j=0; j<16; ++j)
-        {
-            image[i][j] = ((i/4 + j/4) % 2) 
-                ? ((i+j) % 2 ? 0.8f : 0.6f)
-                : ((i+j) % 2 ? 0.2f : 0.1f);
-        }
-    }
-
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_LUMINANCE, GL_FLOAT, image);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
     GLuint sprite_tex = 0;
     glGenTextures(1, &sprite_tex);
@@ -482,7 +448,7 @@ int main(int argc, char * argv[])
         end_menu(g);
 
         auto s = hsplitter(g, 2, {0, 21, w, h}, split1);
-        g.viewport3d = viewport_ui(g, 3, s.first, objects, selection);
+        viewport_ui(g, 3, s.first, objects, selection);
         s = vsplitter(g, 4, s.second, split2);
         object_list_ui(g, 5, s.first, objects, selection, offset0);
         object_properties_ui(g, 6, s.second, selection, offset1);
@@ -503,27 +469,13 @@ int main(int argc, char * argv[])
         per_scene->set_uniform(scene_buffer.data(), "u_lightDir", normalize(float3(0.1f, 0.9f, 0.3f)));   
 
         draw_list list;
-        for(auto & obj : objects)
-        {   
-            const float4x4 model = translation_matrix(obj.position);
-            if(obj.mesh == &ground) list.begin_object(layer_objects, g_ground, program);
-            if(obj.mesh == &box) list.begin_object(layer_objects, g_box, program);
-            if(obj.mesh == &cylinder) list.begin_object(layer_objects, g_cylinder, program);
-            list.set_uniform("u_model", model);
-            list.set_uniform("u_modelIT", inverse(transpose(model)));
-            list.set_uniform("u_diffuseMtl", obj.diffuse);
-            list.set_sampler("u_diffuseTex", diffuse_tex);
-            list.set_sampler("u_normalTex", normal_tex);
-        }
-        if(!selection.empty())
-        {
-            render_gizmo(list, g, translation_matrix(get_center_of_mass(selection)), program2, layer_gizmos, g_gizmo_meshes);
-        }
+        for(auto & obj : objects) obj.draw(layer_objects, list);
 
         glViewport(0, 0, fw, fh);
         glClearColor(0.1f, 0.1f, 0.1f, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         the_renderer.draw_scene(win, g.viewport3d, per_scene, scene_buffer.data(), list);
+        the_renderer.draw_scene(win, g.viewport3d, per_scene, scene_buffer.data(), g.draw);
         render_gui(g, sprite_tex);
 
         glfwSwapBuffers(win);

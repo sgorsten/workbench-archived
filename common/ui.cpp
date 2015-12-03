@@ -38,12 +38,12 @@ gui::gui(sprite_sheet & sprites) : sprites(sprites), default_font(&sprites), bf(
     for(int i=1; i<=32; ++i) corner_sprites[i] = sprites.insert_sprite(make_circle_quadrant(i));
 
     std::initializer_list<float2> points = {{0, 0.05f}, {1, 0.05f}, {1, 0.10f}, {1.2f, 0}};
-    gizmo_meshes[0] = make_lathed_geometry({1,0,0}, {0,1,0}, {0,0,1}, 12, points);
-    gizmo_meshes[1] = make_lathed_geometry({0,1,0}, {0,0,1}, {1,0,0}, 12, points);
-    gizmo_meshes[2] = make_lathed_geometry({0,0,1}, {1,0,0}, {0,1,0}, 12, points);
-    gizmo_meshes[3] = make_box_geometry({-0.01f,0,0}, {0.01f,0.4f,0.4f});
-    gizmo_meshes[4] = make_box_geometry({0,-0.01f,0}, {0.4f,0.01f,0.4f});
-    gizmo_meshes[5] = make_box_geometry({0,0,-0.01f}, {0.4f,0.4f,0.01f});
+    gizmo_res.geomeshes[0] = make_lathed_geometry({1,0,0}, {0,1,0}, {0,0,1}, 12, points);
+    gizmo_res.geomeshes[1] = make_lathed_geometry({0,1,0}, {0,0,1}, {1,0,0}, 12, points);
+    gizmo_res.geomeshes[2] = make_lathed_geometry({0,0,1}, {1,0,0}, {0,1,0}, 12, points);
+    gizmo_res.geomeshes[3] = make_box_geometry({-0.01f,0,0}, {0.01f,0.4f,0.4f});
+    gizmo_res.geomeshes[4] = make_box_geometry({0,-0.01f,0}, {0.4f,0.01f,0.4f});
+    gizmo_res.geomeshes[5] = make_box_geometry({0,0,-0.01f}, {0.4f,0.4f,0.01f});
 }
 
 bool gui::is_cursor_over(const rect & r) const
@@ -91,6 +91,7 @@ void gui::begin_frame(const int2 & window_size)
     vertices.clear();
     lists = {{0, 0}};
     scissor.push_back({0, 0, window_size.x, window_size.y});
+    draw = {};
 }
 
 void gui::end_frame()
@@ -620,12 +621,12 @@ void position_gizmo(gui & g, int id, float3 & position)
         auto ray = g.get_ray_from_cursor();
         ray.origin -= position;
         float best_t = std::numeric_limits<float>::infinity(), t;           
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[0], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_x; best_t = t; }
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[1], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_y; best_t = t; }
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[2], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_z; best_t = t; }
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[3], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_yz; best_t = t; }
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[4], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_zx; best_t = t; }
-        if(intersect_ray_mesh(ray, g.gizmo_meshes[5], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_xy; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[0], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_x; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[1], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_y; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[2], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_z; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[3], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_yz; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[4], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_zx; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[5], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_xy; best_t = t; }
         if(g.gizmode != gizmo_mode::none)
         {
             g.click_offset = ray.origin + ray.direction*t;
@@ -651,4 +652,23 @@ void position_gizmo(gui & g, int id, float3 & position)
 
     // On release, deactivate the current gizmo mode
     if(g.check_release(id)) g.gizmode = gizmo_mode::none;
+
+    // Add the gizmo to our 3D draw list
+    const float3 colors[] = {
+        g.gizmode == gizmo_mode::translate_x ? float3(1,0.5f,0.5f) : float3(1,0,0),
+        g.gizmode == gizmo_mode::translate_y ? float3(0.5f,1,0.5f) : float3(0,1,0),
+        g.gizmode == gizmo_mode::translate_z ? float3(0.5f,0.5f,1) : float3(0,0,1),
+        g.gizmode == gizmo_mode::translate_yz ? float3(0.5f,1,1) : float3(0,1,1),
+        g.gizmode == gizmo_mode::translate_zx ? float3(1,0.5f,1) : float3(1,0,1),
+        g.gizmode == gizmo_mode::translate_xy ? float3(1,1,0.5f) : float3(1,1,0),   
+    };
+
+    auto model = translation_matrix(position), modelIT = inverse(transpose(model));
+    for(int i=0; i<6; ++i)
+    {
+        g.draw.begin_object(g.gizmo_res.layer, g.gizmo_res.meshes[i], g.gizmo_res.program);
+        g.draw.set_uniform("u_model", model);
+        g.draw.set_uniform("u_modelIT", modelIT);
+        g.draw.set_uniform("u_diffuseMtl", colors[i]);
+    }
 }

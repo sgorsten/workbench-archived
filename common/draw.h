@@ -11,7 +11,8 @@
 
 #include <GL\glew.h>
 
-#include "ui.h"
+#include "linalg.h"
+using namespace linalg::aliases;
 
 enum class byte : uint8_t {};
 enum class native_type { float_, double_, int_, unsigned_int, bool_ };
@@ -94,7 +95,17 @@ namespace gfx
     template<class V, int N> void set_attribute(mesh & m, int index, linalg::vec<float,N> V::* attribute) { set_attribute(m, index, N, GL_FLOAT, GL_FALSE, sizeof(V), &(static_cast<V*>(0)->*attribute)); }
 }
 
-// This type does not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.
+// These types do not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.
+struct rect 
+{ 
+    int x0, y0, x1, y1; 
+    int width() const { return x1 - x0; }
+    int height() const { return y1 - y0; }
+    int2 dims() const { return {width(), height()}; }
+    float aspect_ratio() const { return (float)width()/height(); }
+};
+
+
 struct layer
 {
     int draw_order;

@@ -310,8 +310,6 @@ void renderer::draw_scene(GLFWwindow * window, const rect & r, const uniform_blo
     glViewport(r.x0 * multiplier, fh - r.y1 * multiplier, r.width() * multiplier, r.height() * multiplier);
     glScissor(r.x0 * multiplier, fh - r.y1 * multiplier, r.width() * multiplier, r.height() * multiplier);
     glEnable(GL_SCISSOR_TEST);
-    glClearColor(0, 0, 0, 1);
-    glClear(GL_COLOR_BUFFER_BIT);
 
     if(per_scene)
     {
