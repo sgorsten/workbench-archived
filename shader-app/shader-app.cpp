@@ -119,7 +119,6 @@ int main(int argc, char * argv[]) try
     auto g_ground = make_draw_mesh(ctx, ground);
     auto g_box = make_draw_mesh(ctx, box);
     auto g_cylinder = make_draw_mesh(ctx, cylinder);
-    auto layer_objects = std::make_shared<layer>(layer{0, true});
 
     auto win = gfx::create_window(*ctx, {1280, 720}, "Shader App");
     std::vector<input_event> events;
@@ -200,7 +199,7 @@ int main(int argc, char * argv[]) try
         for(auto & obj : objects)
         {   
             const float4x4 model = translation_matrix(obj.position);
-            list.begin_object(layer_objects, obj.dmesh, program);
+            list.begin_object(obj.dmesh, program);
             list.set_uniform("u_model", model);
             list.set_uniform("u_modelIT", inverse(transpose(model)));
             list.set_uniform("u_diffuseMtl", obj.diffuse);

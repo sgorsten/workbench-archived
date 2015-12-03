@@ -32,6 +32,8 @@ geometry_mesh make_box_geometry(const float3 & min_bounds, const float3 & max_bo
 geometry_mesh make_cylinder_geometry(const float3 & axis, const float3 & arm1, const float3 & arm2, int slices);
 geometry_mesh make_lathed_geometry(const float3 & axis, const float3 & arm1, const float3 & arm2, int slices, std::initializer_list<float2> points);
 
+void compute_normals(geometry_mesh & mesh);
+void compute_tangents(geometry_mesh & mesh);
 void generate_texcoords_cubic(geometry_mesh & mesh, float scale);
 
 #endif

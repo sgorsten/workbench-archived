@@ -48,6 +48,21 @@ bool intersect_ray_mesh(const ray & ray, const geometry_mesh & mesh, float * hit
 }
 
 // Procedural geometry
+void compute_normals(geometry_mesh & mesh)
+{
+    for(geometry_vertex & v : mesh.vertices) v.normal = float3();
+    for(int3 & t : mesh.triangles)
+    {
+        geometry_vertex & v0 = mesh.vertices[t.x], & v1 = mesh.vertices[t.y], & v2 = mesh.vertices[t.z];
+        const float3 n = cross(v1.position - v0.position, v2.position - v0.position);
+        v0.normal += n; v1.normal += n; v2.normal += n;
+    }
+    for(geometry_vertex & v : mesh.vertices)
+    {
+        v.normal = normalize(v.normal);
+    }
+}
+
 void compute_tangents(geometry_mesh & mesh)
 {
     for(geometry_vertex & v : mesh.vertices) v.tangent = v.bitangent = float3();
@@ -162,6 +177,7 @@ geometry_mesh make_lathed_geometry(const float3 & axis, const float3 & arm1, con
             }
         }
     }
+    compute_normals(mesh);
     return mesh;
 }
 

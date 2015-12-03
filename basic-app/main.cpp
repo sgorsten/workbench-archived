@@ -52,7 +52,7 @@ in vec2 texCoord;
 void main() 
 { 
     vec3 tsNormal = texture2D(u_normalTex, texCoord).xyz * 2 - 1;
-    vec3 normalVec = normalize(normalize(tangent) * tsNormal.x + normalize(bitangent) * -tsNormal.y + normalize(normal) * tsNormal.z);
+    vec3 normalVec = normalize(normalize(tangent) * tsNormal.x + normalize(bitangent) * -tsNormal.y + normalize(normal) * tsNormal.z/2);
     vec3 eyeVec = normalize(u_eyePos - position);
     vec3 lightDir = normalize(u_lightPos - position);
     vec3 halfVec = normalize(lightDir + eyeVec);
@@ -155,15 +155,11 @@ struct point_light : public scene_object
 struct static_mesh : public scene_object
 {
     const geometry_mesh * mesh;
-    std::shared_ptr<const gfx::program> program;
-    std::shared_ptr<const gfx::texture> diffuse_tex;
-    std::shared_ptr<const gfx::texture> normal_tex;
     std::shared_ptr<const gfx::mesh> gmesh;
-    float3 diffuse;
+    material mat;
 
-    static_mesh(std::string name, float3 position, const geometry_mesh * mesh, std::shared_ptr<const gfx::program> program,
-        std::shared_ptr<const gfx::texture> diffuse_tex, std::shared_ptr<const gfx::texture> normal_tex, std::shared_ptr<const gfx::mesh> gmesh, const float3 & diffuse) : 
-        scene_object(name, position), mesh(mesh), program(program), diffuse_tex(diffuse_tex), normal_tex(normal_tex), gmesh(gmesh), diffuse(diffuse) {}
+    static_mesh(std::string name, float3 position, const geometry_mesh * mesh, std::shared_ptr<const gfx::mesh> gmesh, const material & mat) :
+        scene_object(name, position), mesh(mesh), gmesh(gmesh), mat(mat) {}
 
     bool intersect_ray(ray r, float * t) const
     {
@@ -174,12 +170,9 @@ struct static_mesh : public scene_object
     void draw(draw_list & list) const
     {
         const auto model = get_model_matrix();
-        list.begin_object(gmesh, program);
+        list.begin_object(gmesh, mat);
         list.set_uniform("u_model", model);
         list.set_uniform("u_modelIT", inverse(transpose(model)));
-        list.set_uniform("u_diffuseMtl", diffuse);
-        list.set_sampler("u_diffuseTex", diffuse_tex);
-        list.set_sampler("u_normalTex", normal_tex);
     }
 
     void on_gui(gui & g, const rect & r, int offset)
@@ -193,9 +186,9 @@ struct static_mesh : public scene_object
         draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
         edit(g, 2, {mid + 2, y0, r.x1 - 4, y0 + line_height}, position);
         y0 += line_height + 4;
-        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Diffuse");
-        edit(g, 3, {mid + 2, y0, r.x1 - 4, y0 + line_height}, diffuse);
-        y0 += line_height + 4;
+        //draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Diffuse");
+        //edit(g, 3, {mid + 2, y0, r.x1 - 4, y0 + line_height}, diffuse);
+        //y0 += line_height + 4;
     }
 };
 
@@ -341,8 +334,6 @@ int main(int argc, char * argv[])
     auto frag_shader = compile_shader(ctx, GL_FRAGMENT_SHADER, frag_shader_source);
     auto program = gfx::link_program(ctx, {vert_shader, frag_shader});
     auto program2 = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
-    auto diffuse_tex = load_texture(ctx, "pattern_191_diffuse.png");
-    auto normal_tex = load_texture(ctx, "pattern_191_normal.png");
 
     auto ground = make_box_geometry({-4,-0.1f,-4}, {4,0,4});
     generate_texcoords_cubic(ground, 0.5);
@@ -352,18 +343,27 @@ int main(int argc, char * argv[])
     auto g_box = make_draw_mesh(ctx, box);
     auto g_cylinder = make_draw_mesh(ctx, cylinder);
 
+    material mat(program);
+    mat.set_sampler("u_diffuseTex", load_texture(ctx, "pattern_191_diffuse.png"));
+    mat.set_sampler("u_normalTex", load_texture(ctx, "pattern_191_normal.png"));
+    mat.set_uniform("u_diffuseMtl", float3(0.8f));
+    material mat2 = mat, mat3 = mat, mat4 = mat;
+    mat2.set_uniform("u_diffuseMtl", float3(1,0.5f,0.5f));
+    mat3.set_uniform("u_diffuseMtl", float3(0.5f,1,0.5f));
+    mat4.set_uniform("u_diffuseMtl", float3(0.5f,0.5f,1));
+
     auto plight = new point_light("Point Light", {0,+2,0}, {1,1,1});
     std::vector<scene_object *> objects = {
-        new static_mesh("Ground", {0,0,0}, &ground, program, diffuse_tex, normal_tex, g_ground, {0.8f,0.8f,0.8f}),
-        new static_mesh("Box", {-1,0,0}, &box, program, diffuse_tex, normal_tex, g_box, {1,0.5f,0.5f}),
-        new static_mesh("Cylinder", {0,0,0}, &cylinder, program, diffuse_tex, normal_tex, g_cylinder, {0.5f,1,0.5f}),
-        new static_mesh("Box 2", {+1,0,0}, &box, program, diffuse_tex, normal_tex, g_box, {0.5f,0.5f,1}),
+        new static_mesh("Ground", {0,0,0}, &ground, g_ground, mat),
+        new static_mesh("Box", {-1,0,0}, &box, g_box, mat2),
+        new static_mesh("Cylinder", {0,0,0}, &cylinder, g_cylinder, mat3),
+        new static_mesh("Box 2", {+1,0,0}, &box, g_box, mat4),
         plight
     };
     std::set<scene_object *> selection;
     
     g.gizmo_res.program = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
-    for(int i=0; i<6; ++i) g.gizmo_res.meshes[i] = make_draw_mesh(ctx, g.gizmo_res.geomeshes[i]);
+    for(int i=0; i<9; ++i) g.gizmo_res.meshes[i] = make_draw_mesh(ctx, g.gizmo_res.geomeshes[i]);
 
     renderer the_renderer;
     

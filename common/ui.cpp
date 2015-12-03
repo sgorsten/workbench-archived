@@ -37,13 +37,17 @@ gui::gui(sprite_sheet & sprites) : sprites(sprites), default_font(&sprites), bf(
     default_font.load_glyphs("c:/windows/fonts/arialbd.ttf", 14, codepoints);
     for(int i=1; i<=32; ++i) corner_sprites[i] = sprites.insert_sprite(make_circle_quadrant(i));
 
-    std::initializer_list<float2> points = {{0, 0.05f}, {1, 0.05f}, {1, 0.10f}, {1.2f, 0}};
-    gizmo_res.geomeshes[0] = make_lathed_geometry({1,0,0}, {0,1,0}, {0,0,1}, 12, points);
-    gizmo_res.geomeshes[1] = make_lathed_geometry({0,1,0}, {0,0,1}, {1,0,0}, 12, points);
-    gizmo_res.geomeshes[2] = make_lathed_geometry({0,0,1}, {1,0,0}, {0,1,0}, 12, points);
+    std::initializer_list<float2> arrow_points = {{0, 0.05f}, {1, 0.05f}, {1, 0.10f}, {1.2f, 0}};
+    std::initializer_list<float2> ring_points = {{+0.05f, 1}, {-0.05f, 1}, {-0.05f, 1}, {-0.05f, 1.2f}, {-0.05f, 1.2f}, {+0.05f, 1.2f}, {+0.05f, 1.2f}, {+0.05f, 1}};
+    gizmo_res.geomeshes[0] = make_lathed_geometry({1,0,0}, {0,1,0}, {0,0,1}, 12, arrow_points);
+    gizmo_res.geomeshes[1] = make_lathed_geometry({0,1,0}, {0,0,1}, {1,0,0}, 12, arrow_points);
+    gizmo_res.geomeshes[2] = make_lathed_geometry({0,0,1}, {1,0,0}, {0,1,0}, 12, arrow_points);
     gizmo_res.geomeshes[3] = make_box_geometry({-0.01f,0,0}, {0.01f,0.4f,0.4f});
     gizmo_res.geomeshes[4] = make_box_geometry({0,-0.01f,0}, {0.4f,0.01f,0.4f});
     gizmo_res.geomeshes[5] = make_box_geometry({0,0,-0.01f}, {0.4f,0.4f,0.01f});
+    gizmo_res.geomeshes[6] = make_lathed_geometry({1,0,0}, {0,1,0}, {0,0,1}, 24, ring_points);
+    gizmo_res.geomeshes[7] = make_lathed_geometry({0,1,0}, {0,0,1}, {1,0,0}, 24, ring_points);
+    gizmo_res.geomeshes[8] = make_lathed_geometry({0,0,1}, {1,0,0}, {0,1,0}, 24, ring_points);
 }
 
 bool gui::is_cursor_over(const rect & r) const
@@ -670,5 +674,24 @@ void position_gizmo(gui & g, int id, float3 & position)
         g.draw.set_uniform("u_model", model);
         g.draw.set_uniform("u_modelIT", modelIT);
         g.draw.set_uniform("u_diffuseMtl", colors[i]);
+    }
+}
+
+void orientation_gizmo(gui & g, int id, const float3 & center, float4 & orientation)
+{
+    // Add the gizmo to our 3D draw list
+    const float3 colors[] = {
+        g.gizmode == gizmo_mode::rotate_yz ? float3(0.5f,1,1) : float3(0,1,1),
+        g.gizmode == gizmo_mode::rotate_zx ? float3(1,0.5f,1) : float3(1,0,1),
+        g.gizmode == gizmo_mode::rotate_xy ? float3(1,1,0.5f) : float3(1,1,0),   
+    };
+
+    auto model = translation_matrix(center) * rotation_matrix(orientation), modelIT = inverse(transpose(model));
+    for(int i=6; i<9; ++i)
+    {
+        g.draw.begin_object(g.gizmo_res.meshes[i], g.gizmo_res.program);
+        g.draw.set_uniform("u_model", model);
+        g.draw.set_uniform("u_modelIT", modelIT);
+        g.draw.set_uniform("u_diffuseMtl", colors[i-6]);
     }
 }

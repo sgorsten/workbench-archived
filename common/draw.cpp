@@ -275,6 +275,28 @@ std::ostream & operator << (std::ostream & o, const uniform_desc & u)
     return o << " @ " << u.location << ':' << u.stride.x << ',' << u.stride.y << ',' << u.stride.z;
 }
 
+material::material(std::shared_ptr<const gfx::program> program) : program(program), block(program->desc.get_block_desc("PerObject")), buffer(block->data_size), textures(program->desc.samplers.size()) {}
+
+void material::set_sampler(const char * name, std::shared_ptr<const gfx::texture> texture)
+{
+    for(size_t i=0; i<program->desc.samplers.size(); ++i)
+    {
+        if(program->desc.samplers[i].name == name)
+        {
+            textures[i] = texture;
+        }
+    }
+}
+
+void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, const material & mat)
+{
+    auto program = mat.get_program();
+    const uniform_block_desc * block = program->desc.get_block_desc("PerObject");
+    objects.push_back({mesh, program, block, buffer.size(), textures.size()});
+    buffer.insert(end(buffer), begin(mat.get_buffer()), end(mat.get_buffer()));
+    textures.insert(end(textures), begin(mat.get_textures()), end(mat.get_textures()));
+}
+
 void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program)
 {
     const uniform_block_desc * block = program->desc.get_block_desc("PerObject");

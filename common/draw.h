@@ -105,6 +105,23 @@ struct rect
     float aspect_ratio() const { return (float)width()/height(); }
 };
 
+class material
+{
+    std::shared_ptr<const gfx::program> program;
+    const uniform_block_desc * block; 
+    std::vector<byte> buffer;
+    std::vector<std::shared_ptr<const gfx::texture>> textures;
+public:
+    material(std::shared_ptr<const gfx::program> program);
+
+    std::shared_ptr<const gfx::program> get_program() const { return program; }
+    const std::vector<byte> & get_buffer() const { return buffer; }
+    const std::vector<std::shared_ptr<const gfx::texture>> & get_textures() const { return textures; }
+
+    template<class T> void set_uniform(const char * name, const T & value) { block->set_uniform(buffer.data(), name, value); }
+    void set_sampler(const char * name, std::shared_ptr<const gfx::texture> texture);
+};
+
 class draw_list
 {
     struct object 
@@ -121,6 +138,7 @@ public:
     const std::vector<std::shared_ptr<const gfx::texture>> & get_textures() const { return textures; }
     const std::vector<object> & get_objects() const { return objects; }
 
+    void begin_object(std::shared_ptr<const gfx::mesh> mesh, const material & mat);
     void begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program);
     template<class T> void set_uniform(const char * name, const T & value)
     {

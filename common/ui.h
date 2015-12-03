@@ -23,7 +23,7 @@ struct camera
 };
 
 enum class cursor_icon { arrow, ibeam, hresize, vresize };
-enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy };
+enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy, rotate_yz, rotate_zx, rotate_xy };
 struct menu_stack_frame { rect r; bool open, clicked; };
 
 class widget_id
@@ -38,9 +38,9 @@ public:
 
 struct gizmo_resources
 {
-    geometry_mesh geomeshes[6];
+    geometry_mesh geomeshes[9];
     std::shared_ptr<const gfx::program> program;
-    std::shared_ptr<const gfx::mesh> meshes[6];
+    std::shared_ptr<const gfx::mesh> meshes[9];
 };
 
 struct gui
@@ -150,5 +150,6 @@ void end_menu(gui & g);
 void plane_translation_dragger(gui & g, const float3 & plane_normal, float3 & point);
 void axis_translation_dragger(gui & g, const float3 & axis, float3 & point);
 void position_gizmo(gui & g, int id, float3 & position);
+void orientation_gizmo(gui & g, int id, const float3 & center, float4 & orientation);
 
 #endif
