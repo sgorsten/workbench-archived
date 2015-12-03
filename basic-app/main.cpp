@@ -1,6 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 // For more information, please refer to <http://unlicense.org>
 
+#include "draw.h"
 #include "ui.h"
 
 #include <cassert>
@@ -10,6 +11,118 @@
 #include <algorithm>
 #include <GLFW\glfw3.h>
 #pragma comment(lib, "opengl32.lib")
+
+const char * vert_shader_source = R"(#version 420
+layout(shared, binding=1) uniform PerScene 
+{
+    mat4 u_viewProj; 
+    vec3 u_eyePos;
+    vec3 u_lightDir;
+};
+
+layout(binding=2) uniform PerObject
+{
+    mat4 u_model, u_modelIT;
+    vec3 u_diffuseMtl;
+};
+
+layout(location = 0) in vec3 v_position; 
+layout(location = 1) in vec3 v_normal; 
+layout(location = 2) in vec3 v_tangent; 
+layout(location = 3) in vec3 v_bitangent; 
+layout(location = 4) in vec2 v_texCoord; 
+out vec3 position, normal, tangent, bitangent;
+out vec2 texCoord;
+void main() 
+{
+    position = (u_model * vec4(v_position,1)).xyz;
+    normal = (u_modelIT * vec4(v_normal,0)).xyz;
+    tangent = (u_modelIT * vec4(v_tangent,0)).xyz;
+    bitangent = (u_modelIT * vec4(v_bitangent,0)).xyz;
+    texCoord = v_texCoord;
+    gl_Position = u_viewProj * vec4(position,1);
+})";
+
+const char * frag_shader_source = R"(#version 420
+layout(shared, binding=1) uniform PerScene 
+{
+    mat4 u_viewProj; 
+    vec3 u_eyePos;
+    vec3 u_lightDir;
+};
+
+layout(binding=2) uniform PerObject
+{
+    mat4 u_model, u_modelIT;
+    vec3 u_diffuseMtl;
+};
+
+uniform sampler2D u_diffuseTex;
+uniform sampler2D u_normalTex;
+in vec3 position, normal, tangent, bitangent;
+in vec2 texCoord;
+void main() 
+{ 
+    vec3 tsNormal = texture2D(u_normalTex, texCoord).xyz * 2 - 1;
+    vec3 normalVec = normalize(normalize(tangent) * tsNormal.x + normalize(bitangent) * -tsNormal.y + normalize(normal) * tsNormal.z);
+    vec3 eyeVec = normalize(u_eyePos - position);
+    vec3 halfVec = normalize(normalVec + eyeVec);
+
+    vec3 diffuseMtl = texture2D(u_diffuseTex, texCoord).rgb * u_diffuseMtl;
+    float diffuseLight = max(dot(u_lightDir, normalVec), 0);
+    float specularLight = max(pow(dot(u_lightDir, halfVec), 1024), 0);
+    gl_FragColor = vec4(diffuseMtl * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
+})";
+
+const char * diffuse_vert_shader_source = R"(#version 420
+layout(shared, binding=1) uniform PerScene 
+{
+    mat4 u_viewProj; 
+    vec3 u_eyePos;
+    vec3 u_lightDir;
+};
+
+layout(binding=2) uniform PerObject
+{
+    mat4 u_model, u_modelIT;
+    vec3 u_diffuseMtl;
+};
+
+layout(location = 0) in vec3 v_position; 
+layout(location = 1) in vec3 v_normal;
+out vec3 position, normal;
+void main() 
+{
+    position = (u_model * vec4(v_position,1)).xyz;
+    normal = (u_modelIT * vec4(v_normal,0)).xyz;
+    gl_Position = u_viewProj * vec4(position,1);
+})";
+
+const char * diffuse_frag_shader_source = R"(#version 420
+layout(shared, binding=1) uniform PerScene 
+{
+    mat4 u_viewProj; 
+    vec3 u_eyePos;
+    vec3 u_lightDir;
+};
+
+layout(binding=2) uniform PerObject
+{
+    mat4 u_model, u_modelIT;
+    vec3 u_diffuseMtl;
+};
+
+in vec3 position, normal;
+void main() 
+{ 
+    vec3 normalVec = normalize(normal);
+    vec3 eyeVec = normalize(u_eyePos - position);
+    vec3 halfVec = normalize(normalVec + eyeVec);
+
+    float diffuseLight = max(dot(u_lightDir, normalVec), 0);
+    float specularLight = max(pow(dot(u_lightDir, halfVec), 1024), 0);
+    gl_FragColor = vec4(u_diffuseMtl * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
+})";
 
 void gl_load_matrix(const float4x4 & m) { glLoadMatrixf(&m.x.x); }
 void gl_color(const float3 & v) { glColor3fv(begin(v)); }
@@ -25,14 +138,24 @@ void render_geometry(const geometry_mesh & mesh)
     for(auto s : states) glDisableClientState(s);
 }
 
-void render_gizmo(const gui & g)
+void render_gizmo(draw_list & list, const gui & g, const float4x4 & model, const std::shared_ptr<gfx::program> & program, const std::shared_ptr<gfx::mesh> (& meshes)[6])
 {
-    gl_color(g.gizmode == gizmo_mode::translate_x ? float3(1,0.5f,0.5f) : float3(1,0,0)); render_geometry(g.gizmo_meshes[0]);
-    gl_color(g.gizmode == gizmo_mode::translate_y ? float3(0.5f,1,0.5f) : float3(0,1,0)); render_geometry(g.gizmo_meshes[1]);
-    gl_color(g.gizmode == gizmo_mode::translate_z ? float3(0.5f,0.5f,1) : float3(0,0,1)); render_geometry(g.gizmo_meshes[2]);
-    gl_color(g.gizmode == gizmo_mode::translate_yz ? float3(0.5f,1,1) : float3(0,1,1)); render_geometry(g.gizmo_meshes[3]);
-    gl_color(g.gizmode == gizmo_mode::translate_zx ? float3(1,0.5f,1) : float3(1,0,1)); render_geometry(g.gizmo_meshes[4]);
-    gl_color(g.gizmode == gizmo_mode::translate_xy ? float3(1,1,0.5f) : float3(1,1,0)); render_geometry(g.gizmo_meshes[5]);
+    const float3 colors[] = {
+        g.gizmode == gizmo_mode::translate_x ? float3(1,0.5f,0.5f) : float3(1,0,0),
+        g.gizmode == gizmo_mode::translate_y ? float3(0.5f,1,0.5f) : float3(0,1,0),
+        g.gizmode == gizmo_mode::translate_z ? float3(0.5f,0.5f,1) : float3(0,0,1),
+        g.gizmode == gizmo_mode::translate_yz ? float3(0.5f,1,1) : float3(0,1,1),
+        g.gizmode == gizmo_mode::translate_zx ? float3(1,0.5f,1) : float3(1,0,1),
+        g.gizmode == gizmo_mode::translate_xy ? float3(1,1,0.5f) : float3(1,1,0),   
+    };
+
+    for(int i=0; i<6; ++i)
+    {
+        list.begin_object(meshes[i], program);
+        list.set_uniform("u_model", model);
+        list.set_uniform("u_modelIT", inverse(transpose(model)));
+        list.set_uniform("u_diffuseMtl", colors[i]);
+    }
 }
 
 void render_gui(const gui & g, GLuint sprite_tex)
@@ -184,26 +307,18 @@ rect viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, s
     return r;
 }
 
-void begin_3d(GLFWwindow * win, const rect & r, gui & g)
+std::shared_ptr<gfx::mesh> make_draw_mesh(std::shared_ptr<gfx::context> ctx, const geometry_mesh & mesh)
 {
-    int fw, fh, w, h;
-    glfwGetFramebufferSize(win, &fw, &fh);
-    glfwGetWindowSize(win, &w, &h);
-    const int multiplier = fw / w;
-    assert(w * multiplier == fw);
-    assert(h * multiplier == fh);
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glViewport(r.x0 * multiplier, fh - r.y1 * multiplier, r.width() * multiplier, r.height() * multiplier);
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(r.x0 * multiplier, fh - r.y1 * multiplier, r.width() * multiplier, r.height() * multiplier);
-
-    g.viewport3d = r;
-}
-
-void end_3d()
-{
-    glPopAttrib();
+    const geometry_vertex * vertex = 0;
+    auto m = create_mesh(ctx);
+    set_vertices(*m, mesh.vertices.data(), mesh.vertices.size() * sizeof(geometry_vertex));
+    set_attribute(*m, 0, &geometry_vertex::position);
+    set_attribute(*m, 1, &geometry_vertex::normal);
+    set_attribute(*m, 2, &geometry_vertex::tangent);
+    set_attribute(*m, 3, &geometry_vertex::bitangent);
+    set_attribute(*m, 4, &geometry_vertex::texcoords);
+    set_indices(*m, GL_TRIANGLES, (const unsigned int *)mesh.triangles.data(), mesh.triangles.size() * 3);
+    return m;
 }
 
 int main(int argc, char * argv[])
@@ -227,8 +342,20 @@ int main(int argc, char * argv[])
     };
     std::set<scene_object *> selection;
     
-    glfwInit();
-    auto win = glfwCreateWindow(1280, 720, "Basic Workbench App", nullptr, nullptr);
+    auto ctx = gfx::create_context();
+    auto vert_shader = compile_shader(ctx, GL_VERTEX_SHADER, vert_shader_source);
+    auto frag_shader = compile_shader(ctx, GL_FRAGMENT_SHADER, frag_shader_source);
+    auto program = gfx::link_program(ctx, {vert_shader, frag_shader});
+    auto program2 = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
+    auto diffuse_tex = load_texture(ctx, "pattern_191_diffuse.png");
+    auto normal_tex = load_texture(ctx, "pattern_191_normal.png");
+    auto g_box = make_draw_mesh(ctx, box);
+    auto g_cylinder = make_draw_mesh(ctx, cylinder);
+    std::shared_ptr<gfx::mesh> g_gizmo_meshes[6];
+    for(int i=0; i<6; ++i) g_gizmo_meshes[i] = make_draw_mesh(ctx, g.gizmo_meshes[i]);
+    renderer the_renderer;
+
+    auto win = gfx::create_window(*ctx, {1280, 720}, "Basic Workbench App");
     std::vector<input_event> events;
     install_input_callbacks(win, events);
     glfwMakeContextCurrent(win);
@@ -269,6 +396,7 @@ int main(int argc, char * argv[])
     {
         g.icon = cursor_icon::arrow;
         glfwPollEvents();
+
         if(events.empty()) emit_empty_event(win);
         g.in = events.front();
         events.erase(begin(events));
@@ -347,7 +475,7 @@ int main(int argc, char * argv[])
         end_menu(g);
 
         auto s = hsplitter(g, 2, {0, 21, w, h}, split1);
-        auto view3d = viewport_ui(g, 3, s.first, objects, selection);
+        g.viewport3d = viewport_ui(g, 3, s.first, objects, selection);
         s = vsplitter(g, 4, s.second, split2);
         object_list_ui(g, 5, s.first, objects, selection, offset0);
         object_properties_ui(g, 6, s.second, selection, offset1);
@@ -361,57 +489,34 @@ int main(int argc, char * argv[])
         case cursor_icon::vresize: glfwSetCursor(win, vresize_cursor); break;
         }
 
-        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        const auto * per_scene = get_desc(*program).get_block_desc("PerScene");
+        std::vector<byte> scene_buffer(per_scene->data_size);
+        per_scene->set_uniform(scene_buffer.data(), "u_viewProj", g.get_viewproj_matrix());
+        per_scene->set_uniform(scene_buffer.data(), "u_eyePos", g.cam.position);
+        per_scene->set_uniform(scene_buffer.data(), "u_lightDir", normalize(float3(0.1f, 0.9f, 0.3f)));   
+
+        draw_list list;
+        for(auto & obj : objects)
+        {   
+            const float4x4 model = translation_matrix(obj.position);
+            if(obj.mesh == &box) list.begin_object(g_box, program);
+            if(obj.mesh == &cylinder) list.begin_object(g_cylinder, program);
+            list.set_uniform("u_model", model);
+            list.set_uniform("u_modelIT", inverse(transpose(model)));
+            list.set_uniform("u_diffuseMtl", obj.diffuse);
+            list.set_sampler("u_diffuseTex", diffuse_tex);
+            list.set_sampler("u_normalTex", normal_tex);
+        }
+        if(!selection.empty())
+        {
+            render_gizmo(list, g, translation_matrix(get_center_of_mass(selection)), program2, g_gizmo_meshes);
+        }
+
         glViewport(0, 0, fw, fh);
         glClearColor(0.1f, 0.1f, 0.1f, 1);
         glClear(GL_COLOR_BUFFER_BIT);
-
-        begin_3d(win, view3d, g);
-        glClearColor(0, 0, 0, 1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glMatrixMode(GL_PROJECTION);
-        gl_load_matrix(g.get_projection_matrix());
-
-        glMatrixMode(GL_MODELVIEW);
-        gl_load_matrix(g.get_view_matrix());
-        glEnable(GL_DEPTH_TEST);
-        glBegin(GL_LINES);
-        for(int i=-5; i<=5; ++i)
-        {
-            glVertex3i(i, 0, -5);
-            glVertex3i(i, 0, +5);
-            glVertex3i(-5, 0, i);
-            glVertex3i(+5, 0, i);
-        }
-        glEnd();
-
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, tex);
-        glEnable(GL_LIGHTING);
-        glEnable(GL_LIGHT0);
-        glLightfv(GL_LIGHT0, GL_POSITION, begin(normalize(float4(0.1f, 0.9f, 0.3f, 0))));
-        glEnable(GL_COLOR_MATERIAL);
-        glEnable(GL_CULL_FACE);
-        for(auto & obj : objects)
-        {            
-            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(obj.position));
-            gl_color(obj.diffuse); render_geometry(*obj.mesh);
-        }
-
-        if(!selection.empty())
-        {
-            glClear(GL_DEPTH_BUFFER_BIT);
-            glDisable(GL_TEXTURE_2D);
-            gl_load_matrix(g.cam.get_view_matrix() * translation_matrix(get_center_of_mass(selection)));
-            render_gizmo(g);
-        }
-
-        end_3d();
-
         render_gui(g, sprite_tex);
-
-        glPopAttrib();
+        the_renderer.draw_scene(win, g.viewport3d, per_scene, scene_buffer.data(), list);
 
         glfwSwapBuffers(win);
     }

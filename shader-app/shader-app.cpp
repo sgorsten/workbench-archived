@@ -116,14 +116,13 @@ int main(int argc, char * argv[]) try
     auto program = gfx::link_program(ctx, {vert_shader, frag_shader});
     auto diffuse_tex = load_texture(ctx, "pattern_191_diffuse.png");
     auto normal_tex = load_texture(ctx, "pattern_191_normal.png");
+    auto g_ground = make_draw_mesh(ctx, ground);
+    auto g_box = make_draw_mesh(ctx, box);
+    auto g_cylinder = make_draw_mesh(ctx, cylinder);
 
     auto win = gfx::create_window(*ctx, {1280, 720}, "Shader App");
     std::vector<input_event> events;
     install_input_callbacks(win, events);
-
-    const auto g_ground = make_draw_mesh(ctx, ground);
-    const auto g_box = make_draw_mesh(ctx, box);
-    const auto g_cylinder = make_draw_mesh(ctx, cylinder);
 
     std::vector<scene_object> objects = {
         {"Ground", &ground, g_ground, {0,0,0}, {0.8,0.8,0.8}},
@@ -208,7 +207,8 @@ int main(int argc, char * argv[]) try
             list.set_sampler("u_normalTex", normal_tex);
         }
 
-        the_renderer.draw_scene(win, per_scene, scene_buffer.data(), list);
+        the_renderer.draw_scene(win, {0, 0, w, h}, per_scene, scene_buffer.data(), list);
+        glfwSwapBuffers(win);
     }
     glfwTerminate();
     return EXIT_SUCCESS;

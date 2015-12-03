@@ -297,12 +297,20 @@ void draw_list::set_sampler(const char * name, std::shared_ptr<const gfx::textur
 
 
 
-void renderer::draw_scene(GLFWwindow * window, const uniform_block_desc * per_scene, const void * data, const draw_list & list)
+void renderer::draw_scene(GLFWwindow * window, const rect & r, const uniform_block_desc * per_scene, const void * data, const draw_list & list)
 {
-    int fw, fh;
+    int fw, fh, w, h;
     glfwGetFramebufferSize(window, &fw, &fh);
+    glfwGetWindowSize(window, &w, &h);
+    const int multiplier = fw / w;
+    assert(w * multiplier == fw);
+    assert(h * multiplier == fh);
+
     glfwMakeContextCurrent(window);
-    glViewport(0, 0, fw, fh);
+    glViewport(r.x0 * multiplier, fh - r.y1 * multiplier, r.width() * multiplier, r.height() * multiplier);
+    glScissor(r.x0 * multiplier, fh - r.y1 * multiplier, r.width() * multiplier, r.height() * multiplier);
+    glEnable(GL_SCISSOR_TEST);
+    glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if(per_scene)
@@ -363,7 +371,19 @@ void renderer::draw_scene(GLFWwindow * window, const uniform_block_desc * per_sc
         glDrawElements(current_mesh->primitive_mode, current_mesh->element_count, GL_UNSIGNED_INT, 0);
     }
 
-    glfwSwapBuffers(window);
+    // Reset all state
+    glUseProgram(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    for(int i=0; i<8; ++i) glDisableVertexAttribArray(i);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_SCISSOR_TEST);
+    glViewport(0, 0, fw, fh);
+    glScissor(0, 0, fw, fh);
 }
 
 const gl_data_type * get_gl_data_type(GLenum gl_type)

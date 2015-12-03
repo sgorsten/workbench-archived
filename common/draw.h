@@ -11,8 +11,7 @@
 
 #include <GL\glew.h>
 
-#include "linalg.h"
-using namespace linalg::aliases;
+#include "ui.h"
 
 enum class byte : uint8_t {};
 enum class native_type { float_, double_, int_, unsigned_int, bool_ };
@@ -125,7 +124,7 @@ class renderer
 {
     GLuint scene_ubo=0, object_ubo=0;
 public:
-    void draw_scene(GLFWwindow * window, const uniform_block_desc * per_scene, const void * data, const draw_list & list);
+    void draw_scene(GLFWwindow * window, const rect & viewport, const uniform_block_desc * per_scene, const void * data, const draw_list & list);
 };
 
 #endif
