@@ -179,9 +179,9 @@ void gui::add_glyph(const rect & r_, float s0, float t0, float s1, float t1, con
 
     // Add clipped glyph
     vertices.push_back({short2(r.x0, r.y0), byte4(c0 * 255.0f), {s0, t0}});
-    vertices.push_back({short2(r.x1, r.y0), byte4(c0 * 255.0f), {s1, t0}});
-    vertices.push_back({short2(r.x1, r.y1), byte4(c1 * 255.0f), {s1, t1}});
     vertices.push_back({short2(r.x0, r.y1), byte4(c1 * 255.0f), {s0, t1}});
+    vertices.push_back({short2(r.x1, r.y1), byte4(c1 * 255.0f), {s1, t1}});
+    vertices.push_back({short2(r.x1, r.y0), byte4(c0 * 255.0f), {s1, t0}});
 }
 
 void draw_rect(gui & g, const rect & r, const float4 & color) { draw_rect(g, r, color, color); }

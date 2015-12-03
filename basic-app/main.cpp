@@ -1,7 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 // For more information, please refer to <http://unlicense.org>
 
-#include "draw.h"
+#include "load.h"
 #include "ui.h"
 
 #include <cassert>
@@ -100,21 +100,55 @@ void main()
     gl_FragColor = vec4(u_diffuseMtl * diffuseLight + vec3(0.5) * specularLight, 1);
 })";
 
-void render_gui(const gui & g, GLuint sprite_tex)
+struct gui_resources
 {
-    glMatrixMode(GL_PROJECTION); glLoadIdentity(); glOrtho(0, g.window_size.x, g.window_size.y, 0, -1, +1);
-    glMatrixMode(GL_MODELVIEW); glLoadIdentity();
-    glEnable(GL_TEXTURE_2D); glBindTexture(GL_TEXTURE_2D, sprite_tex);
-    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    std::shared_ptr<const gfx::program> program;
+    std::shared_ptr<gfx::texture> tex;
+    std::shared_ptr<gfx::mesh> mesh;
+    draw_list list;
 
-    const GLenum states[] = {GL_VERTEX_ARRAY, GL_COLOR_ARRAY, GL_TEXTURE_COORD_ARRAY};
-    for(auto s : states) glEnableClientState(s);
-    glVertexPointer(2, GL_SHORT, sizeof(gui::vertex), &g.vertices.data()->position);
-    glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(gui::vertex), &g.vertices.data()->color);
-    glTexCoordPointer(2, GL_FLOAT, sizeof(gui::vertex), &g.vertices.data()->texcoord);
-    for(const auto & list : g.lists) glDrawArrays(GL_QUADS, list.first, list.last - list.first);
-    for(auto s : states) glDisableClientState(s);
-}
+    void init_resources(std::shared_ptr<gfx::context> ctx, const sprite_sheet & sprites)
+    {
+        auto vs = gfx::compile_shader(ctx, GL_VERTEX_SHADER, R"(#version 420
+            layout(binding=2) uniform PerObject { vec2 u_scale, u_offset; };
+            layout(location = 0) in vec2 v_position;
+            layout(location = 1) in vec2 v_texcoord;
+            layout(location = 2) in vec4 v_color;
+            out vec2 texcoord; out vec4 color;
+            void main() 
+            {
+                gl_Position = vec4(v_position * u_scale + u_offset, 0, 1);
+                texcoord = v_texcoord; color = v_color;
+            })");
+        auto fs = gfx::compile_shader(ctx, GL_FRAGMENT_SHADER, R"(#version 420
+            uniform sampler2D u_texture;
+            in vec2 texcoord; in vec4 color;
+            void main() { gl_FragColor = vec4(color.rgb, color.a * texture2D(u_texture, texcoord).a); })");
+        program = gfx::link_program(ctx, {vs,fs});
+
+        tex = gfx::create_texture(ctx);
+        gfx::set_mip_image(tex, 0, GL_ALPHA, sprites.get_texture_dims(), GL_ALPHA, GL_UNSIGNED_BYTE, sprites.get_texture_data());
+
+        mesh = gfx::create_mesh(ctx);
+    }
+    
+    void render_gui(const gui & g)
+    {
+        std::vector<unsigned> indices;
+        for(const auto & list : g.lists) for(int i=list.first; i<list.last; ++i) indices.push_back(i);
+        gfx::set_indices(*mesh, GL_QUADS, indices.data(), indices.size());
+        gfx::set_vertices(*mesh, g.vertices.data(), g.vertices.size() * sizeof(gui::vertex));
+        gfx::set_attribute(*mesh, 0, &gui::vertex::position);
+        gfx::set_attribute(*mesh, 1, &gui::vertex::texcoord);
+        gfx::set_attribute(*mesh, 2, &gui::vertex::color);
+
+        list = {};
+        list.begin_object(mesh, program);
+        list.set_uniform("u_scale", float2(2.0f/g.window_size.x, -2.0f/g.window_size.y));
+        list.set_uniform("u_offset", float2(-1, +1));
+        list.set_sampler("u_texture", tex);
+    }
+};
 
 struct scene_object
 {
@@ -325,7 +359,9 @@ std::shared_ptr<gfx::mesh> make_draw_mesh(std::shared_ptr<gfx::context> ctx, con
     return m;
 }
 
-int main(int argc, char * argv[])
+#include <iostream>
+
+int main(int argc, char * argv[]) try
 {
     sprite_sheet sprites;
 
@@ -371,6 +407,9 @@ int main(int argc, char * argv[])
     };
     std::set<scene_object *> selection;
     
+    gui_resources gui_res;
+    gui_res.init_resources(ctx, sprites);
+
     g.gizmo_res.program = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
     for(int i=0; i<9; ++i) g.gizmo_res.meshes[i] = make_draw_mesh(ctx, g.gizmo_res.geomeshes[i]);
 
@@ -380,14 +419,7 @@ int main(int argc, char * argv[])
     std::vector<input_event> events;
     install_input_callbacks(win, events);
     glfwMakeContextCurrent(win);
-
-    GLuint sprite_tex = 0;
-    glGenTextures(1, &sprite_tex);
-    glBindTexture(GL_TEXTURE_2D, sprite_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, sprites.get_texture_dims().x, sprites.get_texture_dims().y, 0, GL_ALPHA, GL_UNSIGNED_BYTE, sprites.get_texture_data());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
+    
     GLFWcursor * arrow_cursor = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
     GLFWcursor * ibeam_cursor = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
     GLFWcursor * hresize_cursor = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
@@ -501,16 +533,31 @@ int main(int argc, char * argv[])
 
         draw_list list;
         for(auto * obj : objects) obj->draw(list);
+        gui_res.render_gui(g);
 
+        glfwMakeContextCurrent(win);
         glViewport(0, 0, fw, fh);
         glClearColor(0.1f, 0.1f, 0.1f, 1);
         glClear(GL_COLOR_BUFFER_BIT);
+
+        glEnable(GL_CULL_FACE);
+        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_BLEND);
         the_renderer.draw_scene(win, g.viewport3d, per_scene, scene_buffer.data(), list);
         the_renderer.draw_scene(win, g.viewport3d, per_scene, scene_buffer.data(), g.draw);
-        render_gui(g, sprite_tex);
+
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_DEPTH_TEST);
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        the_renderer.draw_scene(win, {0, 0, fw, fh}, nullptr, nullptr, gui_res.list);
 
         glfwSwapBuffers(win);
     }
     glfwTerminate();
     return EXIT_SUCCESS;
+}
+catch(const std::exception & e)
+{
+    std::cerr << e.what() << std::endl;
+    return EXIT_FAILURE;
 }

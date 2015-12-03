@@ -83,7 +83,9 @@ namespace gfx
     std::shared_ptr<program>    link_program        (std::shared_ptr<context> ctx, std::initializer_list<std::shared_ptr<shader>> shaders);
     const program_desc &        get_desc            (const program & p);
 
-    std::shared_ptr<texture>    load_texture        (std::shared_ptr<context> ctx, const char * filename);
+    std::shared_ptr<texture>    create_texture(std::shared_ptr<context> ctx);
+    void                        set_mip_image       (std::shared_ptr<texture> tex, int mip, GLenum internalformat, const int2 & dims, GLenum format, GLenum type, const void * pixels);
+    void                        generate_mips       (std::shared_ptr<texture> tex);
 
     std::shared_ptr<mesh>       create_mesh         (std::shared_ptr<context> ctx);
     void                        set_vertices        (mesh & m, const void * data, size_t size);
@@ -93,6 +95,8 @@ namespace gfx
     GLFWwindow *                create_window       (context & ctx,  const int2 & dims, const char * title, GLFWmonitor * monitor = nullptr);
 
     template<class V, int N> void set_attribute(mesh & m, int index, linalg::vec<float,N> V::* attribute) { set_attribute(m, index, N, GL_FLOAT, GL_FALSE, sizeof(V), &(static_cast<V*>(0)->*attribute)); }
+    template<class V, int N> void set_attribute(mesh & m, int index, linalg::vec<short,N> V::* attribute) { set_attribute(m, index, N, GL_SHORT, GL_FALSE, sizeof(V), &(static_cast<V*>(0)->*attribute)); }
+    template<class V, int N> void set_attribute(mesh & m, int index, linalg::vec<uint8_t,N> V::* attribute) { set_attribute(m, index, N, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(V), &(static_cast<V*>(0)->*attribute)); }
 }
 
 // These types do not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.

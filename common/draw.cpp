@@ -3,12 +3,10 @@
 
 #include "draw.h"
 
+#include <cassert>
 #include <vector>
 #include <string>
 #include <map>
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
 #include <GLFW\glfw3.h>
 
@@ -164,26 +162,28 @@ struct gfx::texture
     ~texture() { if(object_name) glDeleteTextures(1, &object_name); }
 };
 
-std::shared_ptr<gfx::texture> gfx::load_texture(std::shared_ptr<context> ctx, const char * filename)
+std::shared_ptr<gfx::texture> gfx::create_texture(std::shared_ptr<gfx::context> ctx) 
 {
-    glfwMakeContextCurrent(ctx->hidden);
-    int x, y, comp;
-    auto image = stbi_load(filename, &x, &y, &comp, 0);
-    auto tex = std::make_shared<gfx::texture>(ctx);
-    glGenTextures(1, &tex->object_name);
+    return std::make_shared<texture>(ctx);
+}
+
+void gfx::set_mip_image(std::shared_ptr<texture> tex, int mip, GLenum internalformat, const int2 & dims, GLenum format, GLenum type, const void * pixels)
+{
+    glfwMakeContextCurrent(tex->ctx->hidden);
+    if(!tex->object_name) glGenTextures(1, &tex->object_name);
     glBindTexture(GL_TEXTURE_2D, tex->object_name);
-    switch(comp)
-    {
-    case 1: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE,       GL_UNSIGNED_BYTE, image); break;
-    case 2: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, image); break;
-    case 3: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGB,             GL_UNSIGNED_BYTE, image); break;
-    case 4: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, x, y, 0, GL_RGBA,            GL_UNSIGNED_BYTE, image); break;
-    }
+    glTexImage2D(GL_TEXTURE_2D, mip, internalformat, dims.x, dims.y, 0, format, type, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+void gfx::generate_mips(std::shared_ptr<texture> tex)
+{
+    glfwMakeContextCurrent(tex->ctx->hidden);
+    glBindTexture(GL_TEXTURE_2D, tex->object_name);
     glGenerateMipmap(GL_TEXTURE_2D);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    stbi_image_free(image);  
-    return tex;
 }
 
 
@@ -345,9 +345,6 @@ void renderer::draw_scene(GLFWwindow * window, const rect & r, const uniform_blo
     const gfx::program * current_program = nullptr;
     const gfx::mesh * current_mesh = nullptr;
 
-    glEnable(GL_CULL_FACE);
-    glEnable(GL_DEPTH_TEST);
-
     for(auto & object : list.get_objects())
     {
         if(object.program.get() != current_program)
@@ -398,11 +395,7 @@ void renderer::draw_scene(GLFWwindow * window, const rect & r, const uniform_blo
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
     glDisable(GL_SCISSOR_TEST);
-    glViewport(0, 0, fw, fh);
-    glScissor(0, 0, fw, fh);
 }
 
 const gl_data_type * get_gl_data_type(GLenum gl_type)

@@ -8,6 +8,7 @@
     <ClInclude Include="sprite.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="draw.h" />
+    <ClInclude Include="load.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="font.cpp" />
@@ -16,6 +17,7 @@
     <ClCompile Include="ui.cpp" />
     <ClCompile Include="input.cpp" />
     <ClCompile Include="draw.cpp" />
+    <ClCompile Include="load.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
