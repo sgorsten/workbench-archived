@@ -666,7 +666,7 @@ void position_gizmo(gui & g, int id, float3 & position)
     auto model = translation_matrix(position), modelIT = inverse(transpose(model));
     for(int i=0; i<6; ++i)
     {
-        g.draw.begin_object(g.gizmo_res.layer, g.gizmo_res.meshes[i], g.gizmo_res.program);
+        g.draw.begin_object(g.gizmo_res.meshes[i], g.gizmo_res.program);
         g.draw.set_uniform("u_model", model);
         g.draw.set_uniform("u_modelIT", modelIT);
         g.draw.set_uniform("u_diffuseMtl", colors[i]);

@@ -17,7 +17,7 @@ layout(shared, binding=1) uniform PerScene
 {
     mat4 u_viewProj; 
     vec3 u_eyePos;
-    vec3 u_lightDir;
+    vec3 u_lightPos, u_lightColor;
 };
 
 layout(binding=2) uniform PerObject
@@ -48,7 +48,7 @@ layout(shared, binding=1) uniform PerScene
 {
     mat4 u_viewProj; 
     vec3 u_eyePos;
-    vec3 u_lightDir;
+    vec3 u_lightPos, u_lightColor;
 };
 
 layout(binding=2) uniform PerObject
@@ -66,12 +66,13 @@ void main()
     vec3 tsNormal = texture2D(u_normalTex, texCoord).xyz * 2 - 1;
     vec3 normalVec = normalize(normalize(tangent) * tsNormal.x + normalize(bitangent) * -tsNormal.y + normalize(normal) * tsNormal.z);
     vec3 eyeVec = normalize(u_eyePos - position);
-    vec3 halfVec = normalize(normalVec + eyeVec);
+    vec3 lightDir = normalize(u_lightPos - position);
+    vec3 halfVec = normalize(lightDir + eyeVec);
 
     vec3 diffuseMtl = texture2D(u_diffuseTex, texCoord).rgb * u_diffuseMtl;
-    float diffuseLight = max(dot(u_lightDir, normalVec), 0);
-    float specularLight = max(pow(dot(u_lightDir, halfVec), 1024), 0);
-    gl_FragColor = vec4(diffuseMtl * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
+    float diffuseLight = max(dot(lightDir, normalVec), 0);
+    float specularLight = max(pow(dot(halfVec, normalVec), 1024), 0);
+    gl_FragColor = vec4(diffuseMtl * u_lightColor * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
 })";
 
 const char * diffuse_vert_shader_source = R"(#version 420
@@ -79,7 +80,7 @@ layout(shared, binding=1) uniform PerScene
 {
     mat4 u_viewProj; 
     vec3 u_eyePos;
-    vec3 u_lightDir;
+    vec3 u_lightPos, u_lightColor;
 };
 
 layout(binding=2) uniform PerObject
@@ -103,7 +104,7 @@ layout(shared, binding=1) uniform PerScene
 {
     mat4 u_viewProj; 
     vec3 u_eyePos;
-    vec3 u_lightDir;
+    vec3 u_lightPos, u_lightColor;
 };
 
 layout(binding=2) uniform PerObject
@@ -117,10 +118,11 @@ void main()
 { 
     vec3 normalVec = normalize(normal);
     vec3 eyeVec = normalize(u_eyePos - position);
-    vec3 halfVec = normalize(normalVec + eyeVec);
+    vec3 lightDir = normalize(u_lightPos - position);
+    vec3 halfVec = normalize(lightDir + eyeVec);
 
-    float diffuseLight = max(dot(u_lightDir, normalVec), 0);
-    float specularLight = max(pow(dot(u_lightDir, halfVec), 1024), 0);
+    float diffuseLight = max(dot(lightDir, normalVec), 0);
+    float specularLight = max(pow(dot(halfVec, normalVec), 1024), 0);
     gl_FragColor = vec4(u_diffuseMtl * (diffuseLight + 0.1f) + vec3(0.5) * specularLight, 1);
 })";
 
@@ -143,37 +145,95 @@ void render_gui(const gui & g, GLuint sprite_tex)
 struct scene_object
 {
     std::string name;
+    float3 position;
+
+    scene_object(std::string name, float3 position) : name(name), position(position) {}
+
+    float4x4 get_model_matrix() const { return translation_matrix(position); }
+    virtual bool intersect_ray(ray r, float * t) const { return false; }
+    virtual void draw(draw_list & list) const {}
+    virtual void on_gui(gui & g, const rect & r, int offset) = 0;
+};
+
+struct point_light : public scene_object
+{
+    float3 color;
+
+    point_light(std::string name, float3 position, float3 color) : scene_object(name, position), color(color) {}
+
+    void on_gui(gui & g, const rect & r, int offset)
+    {
+        int y0 = r.y0 + 4 - offset;
+
+        const int line_height = g.default_font.line_height + 4, mid = (r.x0 + r.x1) / 2;
+        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Name");
+        edit(g, 1, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
+        y0 += line_height + 4;
+        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
+        edit(g, 2, {mid + 2, y0, r.x1 - 4, y0 + line_height}, position);
+        y0 += line_height + 4;
+        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Color");
+        edit(g, 3, {mid + 2, y0, r.x1 - 4, y0 + line_height}, color);
+        y0 += line_height + 4;    
+    }
+};
+
+struct static_mesh : public scene_object
+{
     const geometry_mesh * mesh;
     std::shared_ptr<const gfx::program> program;
     std::shared_ptr<const gfx::texture> diffuse_tex;
     std::shared_ptr<const gfx::texture> normal_tex;
     std::shared_ptr<const gfx::mesh> gmesh;
-    float3 position, diffuse;
+    float3 diffuse;
 
-    float4x4 get_model_matrix() const { return translation_matrix(position); }
-    void draw(const std::shared_ptr<layer> & layer_objects, draw_list & list) const
+    static_mesh(std::string name, float3 position, const geometry_mesh * mesh, std::shared_ptr<const gfx::program> program,
+        std::shared_ptr<const gfx::texture> diffuse_tex, std::shared_ptr<const gfx::texture> normal_tex, std::shared_ptr<const gfx::mesh> gmesh, const float3 & diffuse) : 
+        scene_object(name, position), mesh(mesh), program(program), diffuse_tex(diffuse_tex), normal_tex(normal_tex), gmesh(gmesh), diffuse(diffuse) {}
+
+    bool intersect_ray(ray r, float * t) const
+    {
+        r.origin -= position;
+        return intersect_ray_mesh(r, *mesh, t);
+    }
+
+    void draw(draw_list & list) const
     {
         const auto model = get_model_matrix();
-        list.begin_object(layer_objects, gmesh, program);
+        list.begin_object(gmesh, program);
         list.set_uniform("u_model", model);
         list.set_uniform("u_modelIT", inverse(transpose(model)));
         list.set_uniform("u_diffuseMtl", diffuse);
         list.set_sampler("u_diffuseTex", diffuse_tex);
         list.set_sampler("u_normalTex", normal_tex);
     }
+
+    void on_gui(gui & g, const rect & r, int offset)
+    {
+        int y0 = r.y0 + 4 - offset;
+
+        const int line_height = g.default_font.line_height + 4, mid = (r.x0 + r.x1) / 2;
+        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Name");
+        edit(g, 1, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
+        y0 += line_height + 4;
+        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
+        edit(g, 2, {mid + 2, y0, r.x1 - 4, y0 + line_height}, position);
+        y0 += line_height + 4;
+        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Diffuse");
+        edit(g, 3, {mid + 2, y0, r.x1 - 4, y0 + line_height}, diffuse);
+        y0 += line_height + 4;
+    }
 };
 
-scene_object * raycast(const ray & ray, std::vector<scene_object> & objects)
+scene_object * raycast(const ray & ray, const std::vector<scene_object *> & objects)
 {
     scene_object * best = nullptr;
     float t, best_t;
-    for(auto & obj : objects)
+    for(auto * obj : objects)
     {
-        auto r = ray;
-        r.origin -= obj.position;
-        if(intersect_ray_mesh(r, *obj.mesh, &t) && (!best || t < best_t))
+        if(obj->intersect_ray(ray, &t) && (!best || t < best_t))
         {
-            best = &obj;
+            best = obj;
             best_t = t;
         }
     }
@@ -187,7 +247,7 @@ float3 get_center_of_mass(const std::set<scene_object *> & objects)
     return sum / (float)objects.size();
 }
 
-void object_list_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, std::set<scene_object *> & selection, int & offset)
+void object_list_ui(gui & g, int id, rect r, const std::vector<scene_object *> & objects, std::set<scene_object *> & selection, int & offset)
 {
     r = tabbed_frame(g, r, "Object List");
 
@@ -195,20 +255,20 @@ void object_list_ui(gui & g, int id, rect r, std::vector<scene_object> & objects
     g.begin_children(id);
     g.begin_scissor(panel);
     int y0 = panel.y0 + 4 - offset;
-    for(auto & obj : objects)
+    for(auto * obj : objects)
     {
         const rect list_entry = {panel.x0 + 4, y0, panel.x1 - 4, y0 + g.default_font.line_height};
         if(g.check_click(&obj - objects.data(), list_entry))
         {
             if(!g.is_control_held()) selection.clear();
-            auto it = selection.find(&obj);
-            if(it == end(selection)) selection.insert(&obj);
+            auto it = selection.find(obj);
+            if(it == end(selection)) selection.insert(obj);
             else selection.erase(it);
             g.gizmode = gizmo_mode::none;
         }
 
-        bool selected = selection.find(&obj) != end(selection);
-        draw_shadowed_text(g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj.name);
+        bool selected = selection.find(obj) != end(selection);
+        draw_shadowed_text(g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj->name);
         y0 += g.default_font.line_height + 4;
     }
     g.end_scissor();
@@ -226,24 +286,12 @@ void object_properties_ui(gui & g, int id, rect r, std::set<scene_object *> & se
     auto panel = vscroll_panel(g, id, r, 1000, offset); // TODO: Determine correct size
     g.begin_children(id);
     g.begin_scissor(panel);
-    int y0 = panel.y0 + 4 - offset;
-
-    const int line_height = g.default_font.line_height + 4, mid = (panel.x0 + panel.x1) / 2;
-    draw_shadowed_text(g, {panel.x0 + 4, y0 + 2}, {1,1,1,1}, "Name");
-    edit(g, 1, {mid + 2, y0, panel.x1 - 4, y0 + line_height}, obj.name);
-    y0 += line_height + 4;
-    draw_shadowed_text(g, {panel.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
-    edit(g, 2, {mid + 2, y0, panel.x1 - 4, y0 + line_height}, obj.position);
-    y0 += line_height + 4;
-    draw_shadowed_text(g, {panel.x0 + 4, y0 + 2}, {1,1,1,1}, "Diffuse");
-    edit(g, 3, {mid + 2, y0, panel.x1 - 4, y0 + line_height}, obj.diffuse);
-    y0 += line_height + 4;
-
+    obj.on_gui(g, panel, offset);
     g.end_scissor();
     g.end_children();
 }
 
-void viewport_ui(gui & g, int id, rect r, std::vector<scene_object> & objects, std::set<scene_object *> & selection)
+void viewport_ui(gui & g, int id, rect r, std::vector<scene_object *> & objects, std::set<scene_object *> & selection)
 {
     g.viewport3d = r = tabbed_frame(g, r, "Scene View");
 
@@ -330,22 +378,21 @@ int main(int argc, char * argv[])
     auto g_box = make_draw_mesh(ctx, box);
     auto g_cylinder = make_draw_mesh(ctx, cylinder);
 
-    std::vector<scene_object> objects = {
-        {"Ground", &ground, program, diffuse_tex, normal_tex, g_ground, {0,0,0}, {0.8,0.8,0.8}},
-        {"Box", &box, program, diffuse_tex, normal_tex, g_box, {-1,0,0}, {1,0.5f,0.5f}},
-        {"Cylinder", &cylinder, program, diffuse_tex, normal_tex, g_cylinder, {0,0,0}, {0.5f,1,0.5f}},
-        {"Box 2", &box, program, diffuse_tex, normal_tex, g_box, {+1,0,0}, {0.5f,0.5f,1}}
+    auto plight = new point_light("Point Light", {0,+2,0}, {1,1,1});
+    std::vector<scene_object *> objects = {
+        new static_mesh("Ground", {0,0,0}, &ground, program, diffuse_tex, normal_tex, g_ground, {0.8f,0.8f,0.8f}),
+        new static_mesh("Box", {-1,0,0}, &box, program, diffuse_tex, normal_tex, g_box, {1,0.5f,0.5f}),
+        new static_mesh("Cylinder", {0,0,0}, &cylinder, program, diffuse_tex, normal_tex, g_cylinder, {0.5f,1,0.5f}),
+        new static_mesh("Box 2", {+1,0,0}, &box, program, diffuse_tex, normal_tex, g_box, {0.5f,0.5f,1}),
+        plight
     };
     std::set<scene_object *> selection;
     
-    g.gizmo_res.layer = std::make_shared<layer>(layer{1, true});
     g.gizmo_res.program = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
     for(int i=0; i<6; ++i) g.gizmo_res.meshes[i] = make_draw_mesh(ctx, g.gizmo_res.geomeshes[i]);
 
     renderer the_renderer;
-
-    auto layer_objects = std::make_shared<layer>(layer{0, true});
-
+    
     auto win = gfx::create_window(*ctx, {1280, 720}, "Basic Workbench App");
     std::vector<input_event> events;
     install_input_callbacks(win, events);
@@ -434,7 +481,7 @@ int main(int argc, char * argv[])
                 if(menu_item(g, "Select All", GLFW_MOD_CONTROL, GLFW_KEY_A))
                 {
                     selection.clear();
-                    for(auto & obj : objects) selection.insert(&obj);
+                    for(auto * obj : objects) selection.insert(obj);
                 }
             }
             end_popup(g);
@@ -466,10 +513,11 @@ int main(int argc, char * argv[])
         std::vector<byte> scene_buffer(per_scene->data_size);
         per_scene->set_uniform(scene_buffer.data(), "u_viewProj", g.get_viewproj_matrix());
         per_scene->set_uniform(scene_buffer.data(), "u_eyePos", g.cam.position);
-        per_scene->set_uniform(scene_buffer.data(), "u_lightDir", normalize(float3(0.1f, 0.9f, 0.3f)));   
+        per_scene->set_uniform(scene_buffer.data(), "u_lightPos", plight->position);
+        per_scene->set_uniform(scene_buffer.data(), "u_lightColor", plight->color);
 
         draw_list list;
-        for(auto & obj : objects) obj.draw(layer_objects, list);
+        for(auto * obj : objects) obj->draw(list);
 
         glViewport(0, 0, fw, fh);
         glClearColor(0.1f, 0.1f, 0.1f, 1);

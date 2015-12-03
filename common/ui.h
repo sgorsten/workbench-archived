@@ -39,7 +39,6 @@ public:
 struct gizmo_resources
 {
     geometry_mesh geomeshes[6];
-    std::shared_ptr<const layer> layer;
     std::shared_ptr<const gfx::program> program;
     std::shared_ptr<const gfx::mesh> meshes[6];
 };
