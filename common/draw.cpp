@@ -275,10 +275,10 @@ std::ostream & operator << (std::ostream & o, const uniform_desc & u)
     return o << " @ " << u.location << ':' << u.stride.x << ',' << u.stride.y << ',' << u.stride.z;
 }
 
-void draw_list::begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program)
+void draw_list::begin_object(std::shared_ptr<const layer> layer, std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program)
 {
     const uniform_block_desc * block = program->desc.get_block_desc("PerObject");
-    objects.push_back({mesh, program, block, buffer.size(), textures.size()});
+    objects.push_back({layer, mesh, program, block, buffer.size(), textures.size()});
     buffer.resize(buffer.size() + block->data_size);
     textures.resize(textures.size() + program->desc.samplers.size());
 }
@@ -311,7 +311,7 @@ void renderer::draw_scene(GLFWwindow * window, const rect & r, const uniform_blo
     glScissor(r.x0 * multiplier, fh - r.y1 * multiplier, r.width() * multiplier, r.height() * multiplier);
     glEnable(GL_SCISSOR_TEST);
     glClearColor(0, 0, 0, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     if(per_scene)
     {
@@ -323,14 +323,21 @@ void renderer::draw_scene(GLFWwindow * window, const rect & r, const uniform_blo
 
     if(!object_ubo) glGenBuffers(1, &object_ubo);
     const byte * buffer = list.get_buffer().data();
+    const layer * current_layer = nullptr;
     const gfx::program * current_program = nullptr;
     const gfx::mesh * current_mesh = nullptr;
 
-    glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
 
     for(auto & object : list.get_objects())
     {   
+        if(object.layer.get() != current_layer)
+        {
+            current_layer = object.layer.get();
+            if(current_layer->clear_depth) glClear(GL_DEPTH_BUFFER_BIT);
+        }
+
         if(object.program.get() != current_program)
         {
             current_program = object.program.get();

@@ -95,10 +95,17 @@ namespace gfx
 }
 
 // This type does not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.
+struct layer
+{
+    int draw_order;
+    bool clear_depth;
+};
+
 class draw_list
 {
     struct object 
     { 
+        std::shared_ptr<const layer> layer;
         std::shared_ptr<const gfx::mesh> mesh;
         std::shared_ptr<const gfx::program> program;
         const uniform_block_desc * block; size_t buffer_offset, texture_offset;
@@ -111,7 +118,7 @@ public:
     const std::vector<std::shared_ptr<const gfx::texture>> & get_textures() const { return textures; }
     const std::vector<object> & get_objects() const { return objects; }
 
-    void begin_object(std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program);
+    void begin_object(std::shared_ptr<const layer> layer, std::shared_ptr<const gfx::mesh> mesh, std::shared_ptr<const gfx::program> program);
     template<class T> void set_uniform(const char * name, const T & value)
     {
         const auto & object = objects.back();

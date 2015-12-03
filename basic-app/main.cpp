@@ -138,7 +138,7 @@ void render_geometry(const geometry_mesh & mesh)
     for(auto s : states) glDisableClientState(s);
 }
 
-void render_gizmo(draw_list & list, const gui & g, const float4x4 & model, const std::shared_ptr<gfx::program> & program, const std::shared_ptr<gfx::mesh> (& meshes)[6])
+void render_gizmo(draw_list & list, const gui & g, const float4x4 & model, const std::shared_ptr<gfx::program> & program, const std::shared_ptr<layer> & layer, const std::shared_ptr<gfx::mesh> (& meshes)[6])
 {
     const float3 colors[] = {
         g.gizmode == gizmo_mode::translate_x ? float3(1,0.5f,0.5f) : float3(1,0,0),
@@ -151,7 +151,7 @@ void render_gizmo(draw_list & list, const gui & g, const float4x4 & model, const
 
     for(int i=0; i<6; ++i)
     {
-        list.begin_object(meshes[i], program);
+        list.begin_object(layer, meshes[i], program);
         list.set_uniform("u_model", model);
         list.set_uniform("u_modelIT", inverse(transpose(model)));
         list.set_uniform("u_diffuseMtl", colors[i]);
@@ -333,9 +333,12 @@ int main(int argc, char * argv[])
 
     sprites.prepare_texture();
 
+    auto ground = make_box_geometry({-4,-0.1f,-4}, {4,0,4});
+    generate_texcoords_cubic(ground, 0.5);
     const auto box = make_box_geometry({-0.4f,0.0f,-0.4f}, {0.4f,0.8f,0.4f});
     const auto cylinder = make_cylinder_geometry({0,1,0}, {0,0,0.4f}, {0.4f,0,0}, 24);
     std::vector<scene_object> objects = {
+        {"Ground", &ground, {0,0,0}, {0.8,0.8,0.8}},
         {"Box", &box, {-1,0,0}, {1,0.5f,0.5f}},
         {"Cylinder", &cylinder, {0,0,0}, {0.5f,1,0.5f}},
         {"Box 2", &box, {+1,0,0}, {0.5f,0.5f,1}}
@@ -349,11 +352,15 @@ int main(int argc, char * argv[])
     auto program2 = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
     auto diffuse_tex = load_texture(ctx, "pattern_191_diffuse.png");
     auto normal_tex = load_texture(ctx, "pattern_191_normal.png");
+    auto g_ground = make_draw_mesh(ctx, ground);
     auto g_box = make_draw_mesh(ctx, box);
     auto g_cylinder = make_draw_mesh(ctx, cylinder);
     std::shared_ptr<gfx::mesh> g_gizmo_meshes[6];
     for(int i=0; i<6; ++i) g_gizmo_meshes[i] = make_draw_mesh(ctx, g.gizmo_meshes[i]);
     renderer the_renderer;
+
+    auto layer_objects = std::make_shared<layer>(layer{0, true});
+    auto layer_gizmos = std::make_shared<layer>(layer{1, true});
 
     auto win = gfx::create_window(*ctx, {1280, 720}, "Basic Workbench App");
     std::vector<input_event> events;
@@ -499,8 +506,9 @@ int main(int argc, char * argv[])
         for(auto & obj : objects)
         {   
             const float4x4 model = translation_matrix(obj.position);
-            if(obj.mesh == &box) list.begin_object(g_box, program);
-            if(obj.mesh == &cylinder) list.begin_object(g_cylinder, program);
+            if(obj.mesh == &ground) list.begin_object(layer_objects, g_ground, program);
+            if(obj.mesh == &box) list.begin_object(layer_objects, g_box, program);
+            if(obj.mesh == &cylinder) list.begin_object(layer_objects, g_cylinder, program);
             list.set_uniform("u_model", model);
             list.set_uniform("u_modelIT", inverse(transpose(model)));
             list.set_uniform("u_diffuseMtl", obj.diffuse);
@@ -509,14 +517,14 @@ int main(int argc, char * argv[])
         }
         if(!selection.empty())
         {
-            render_gizmo(list, g, translation_matrix(get_center_of_mass(selection)), program2, g_gizmo_meshes);
+            render_gizmo(list, g, translation_matrix(get_center_of_mass(selection)), program2, layer_gizmos, g_gizmo_meshes);
         }
 
         glViewport(0, 0, fw, fh);
         glClearColor(0.1f, 0.1f, 0.1f, 1);
         glClear(GL_COLOR_BUFFER_BIT);
-        render_gui(g, sprite_tex);
         the_renderer.draw_scene(win, g.viewport3d, per_scene, scene_buffer.data(), list);
+        render_gui(g, sprite_tex);
 
         glfwSwapBuffers(win);
     }
