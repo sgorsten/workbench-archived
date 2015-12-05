@@ -33,7 +33,7 @@ bool widget_id::is_parent_of(const widget_id & r, int id) const
 gui::gui(sprite_sheet & sprites) : sprites(sprites), default_font(&sprites), bf(), bl(), bb(), br(), ml(), mr(), in({}), timestep(), cam({}), gizmode() 
 {
     std::vector<int> codepoints;
-    for(int i=0; i<128; ++i) if(isprint(i)) codepoints.push_back(i);
+    for(int i=32; i<256; ++i) codepoints.push_back(i);
     default_font.load_glyphs("c:/windows/fonts/arialbd.ttf", 14, codepoints);
     for(int i=1; i<=32; ++i) corner_sprites[i] = sprites.insert_sprite(make_circle_quadrant(i));
 
@@ -96,6 +96,8 @@ void gui::begin_frame(const int2 & window_size)
     lists = {{0, 0}};
     scissor.push_back({0, 0, window_size.x, window_size.y});
     draw = {};
+    clip_event = clipboard_event::none;
+    clipboard.clear();
 }
 
 void gui::end_frame()
@@ -226,9 +228,9 @@ void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & top_c
 
 void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
 {         
-    for(auto ch : text)
+    for(const char * it = text.data(), * end = it + text.size(); it != end; it = utf8::next(it))
     {
-        if(auto * glyph = g.default_font.get_glyph(ch))
+        if(auto * glyph = g.default_font.get_glyph(utf8::code(it)))
         {
             auto & s = g.sprites.get_sprite(glyph->sprite_index);
             const int2 p0 = p + glyph->offset, p1 = p0 + s.dims;
@@ -243,6 +245,9 @@ void draw_shadowed_text(gui & g, int2 p, const float4 & c, const std::string & t
     draw_text(g, p+1, {0,0,0,c.w}, text);
     draw_text(g, p, c, text);
 }
+
+static void prev_char(const std::string & text, std::string::size_type & pos) { pos = utf8::prev(text.data() + pos) - text.data(); }
+static void next_char(const std::string & text, std::string::size_type & pos) { pos = utf8::next(text.data() + pos) - text.data(); }
 
 bool edit(gui & g, int id, const rect & r, std::string & text)
 {
@@ -271,8 +276,9 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
                 g.text_cursor = g.text_mark = lo;
             }
 
-            assert(isprint(g.in.codepoint)); // Only support printable ASCII for now, later, we will encode other characters in utf-8
-            text.insert(begin(text) + g.text_cursor++, (char)g.in.codepoint);
+            auto units = utf8::units(g.in.codepoint);
+            text.insert(g.text_cursor, units.data());
+            next_char(text, g.text_cursor);
             g.text_mark = g.text_cursor;
             changed = true;
         }
@@ -280,11 +286,11 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
         if(g.in.type == input::key_down) switch(g.in.key)
         {
         case GLFW_KEY_LEFT:
-            if(g.text_cursor > 0) --g.text_cursor;
+            if(g.text_cursor > 0) prev_char(text, g.text_cursor);
             if(!g.is_shift_held()) g.text_mark = g.text_cursor;
             break;
         case GLFW_KEY_RIGHT:
-            if(g.text_cursor < text.size()) ++g.text_cursor;
+            if(g.text_cursor < text.size()) next_char(text, g.text_cursor);
             if(!g.is_shift_held()) g.text_mark = g.text_cursor;
             break;
         case GLFW_KEY_HOME:
@@ -306,7 +312,8 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
             }
             else if(g.text_cursor > 0)
             {
-                text.erase(begin(text) + --g.text_cursor); 
+                prev_char(text, g.text_cursor);
+                text.erase(begin(text) + g.text_cursor, begin(text) + g.text_mark);
                 g.text_mark = g.text_cursor;
                 changed = true;
             }
@@ -322,9 +329,45 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
             }
             if(g.text_cursor < text.size())
             {
-                text.erase(begin(text) + g.text_cursor);
+                next_char(text, g.text_mark);
+                text.erase(begin(text) + g.text_cursor, begin(text) + g.text_mark);
+                g.text_mark = g.text_cursor;
                 changed = true;
             }
+            break;
+        }
+
+        switch(g.clip_event)
+        {
+        case clipboard_event::cut:
+            if(g.text_cursor != g.text_mark)
+            {
+                auto lo = std::min(g.text_cursor, g.text_mark);
+                auto hi = std::max(g.text_cursor, g.text_mark);
+                g.clipboard = text.substr(lo, hi-lo);
+                text.erase(begin(text)+lo, begin(text)+hi);
+                g.text_cursor = g.text_mark = lo;
+                changed = true;
+            }
+            break;
+        case clipboard_event::copy:
+            if(g.text_cursor != g.text_mark)
+            {
+                auto lo = std::min(g.text_cursor, g.text_mark);
+                auto hi = std::max(g.text_cursor, g.text_mark);
+                g.clipboard = text.substr(lo, hi-lo);
+            }
+            break;
+        case clipboard_event::paste:
+            if(g.text_cursor != g.text_mark)
+            {
+                auto lo = std::min(g.text_cursor, g.text_mark);
+                auto hi = std::max(g.text_cursor, g.text_mark);
+                text.erase(begin(text)+lo, begin(text)+hi);
+                g.text_cursor = g.text_mark = lo;
+            }
+            text.insert(begin(text)+g.text_cursor, begin(g.clipboard), end(g.clipboard));
+            changed = true;
             break;
         }
     }

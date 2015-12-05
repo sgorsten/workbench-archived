@@ -43,6 +43,8 @@ struct gizmo_resources
     std::shared_ptr<const gfx::mesh> meshes[9];
 };
 
+enum class clipboard_event { none, cut, copy, paste };
+
 struct gui
 {
     struct vertex { short2 position; byte4 color; float2 texcoord; };    
@@ -63,6 +65,8 @@ struct gui
     bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
     input_event in;
     float timestep;                 // Timestep between the last frame and this one
+    clipboard_event clip_event;
+    std::string clipboard;
 
     cursor_icon icon;
 

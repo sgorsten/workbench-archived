@@ -489,9 +489,13 @@ int main(int argc, char * argv[]) try
                 menu_item(g, "Undo", GLFW_MOD_CONTROL, GLFW_KEY_Z);
                 menu_item(g, "Redo", GLFW_MOD_CONTROL, GLFW_KEY_Y);
 
-                menu_item(g, "Cut", GLFW_MOD_CONTROL, GLFW_KEY_X);
-                menu_item(g, "Copy", GLFW_MOD_CONTROL, GLFW_KEY_C);
-                menu_item(g, "Paste", GLFW_MOD_CONTROL, GLFW_KEY_V);
+                if(menu_item(g, "Cut", GLFW_MOD_CONTROL, GLFW_KEY_X)) g.clip_event = clipboard_event::cut;
+                if(menu_item(g, "Copy", GLFW_MOD_CONTROL, GLFW_KEY_C)) g.clip_event = clipboard_event::copy;
+                if(menu_item(g, "Paste", GLFW_MOD_CONTROL, GLFW_KEY_V))
+                {
+                    g.clip_event = clipboard_event::paste;
+                    g.clipboard = glfwGetClipboardString(win);
+                }
 
                 if(menu_item(g, "Select All", GLFW_MOD_CONTROL, GLFW_KEY_A))
                 {
@@ -515,6 +519,11 @@ int main(int argc, char * argv[]) try
         object_list_ui(g, 5, s.first, objects, selection, offset0);
         object_properties_ui(g, 6, s.second, selection, offset1);
         g.end_frame();
+
+        if(g.clip_event == clipboard_event::cut || g.clip_event == clipboard_event::copy)
+        {
+            glfwSetClipboardString(win, g.clipboard.c_str());
+        }
 
         if(is_cursor_entered(win)) switch(g.icon)
         {
