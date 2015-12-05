@@ -33,8 +33,11 @@ bool widget_id::is_parent_of(const widget_id & r, int id) const
 gui::gui(sprite_sheet & sprites) : sprites(sprites), default_font(&sprites), bf(), bl(), bb(), br(), ml(), mr(), in({}), timestep(), cam({}), gizmode() 
 {
     std::vector<int> codepoints;
-    for(int i=32; i<256; ++i) codepoints.push_back(i);
+    for(int i=0; i<128; ++i) if(isprint(i)) codepoints.push_back(i);
     default_font.load_glyphs("c:/windows/fonts/arialbd.ttf", 14, codepoints);
+    codepoints.clear();
+    for(int i=0xf000; i<=0xf295; ++i) codepoints.push_back(i);
+    default_font.load_glyphs("fontawesome-webfont.ttf", 14, codepoints);
     for(int i=1; i<=32; ++i) corner_sprites[i] = sprites.insert_sprite(make_circle_quadrant(i));
 
     std::initializer_list<float2> arrow_points = {{0, 0.05f}, {1, 0.05f}, {1, 0.10f}, {1.2f, 0}};
@@ -503,7 +506,7 @@ static rect get_next_menu_item_rect(gui & g, rect & r, const std::string & capti
     }
     else
     {
-        const rect item = {r.x0 + 4, r.y1, r.x0 + 8 + g.default_font.get_text_width(caption), r.y1 + g.default_font.line_height};
+        const rect item = {r.x0 + 4, r.y1, r.x0 + 190, r.y1 + g.default_font.line_height};
         r.x1 = std::max(r.x1, item.x1);
         r.y1 = item.y1 + 4;
         return item;    
@@ -518,7 +521,14 @@ void begin_popup(gui & g, int id, const std::string & caption)
     if(f.open)
     {
         if(g.is_cursor_over(item)) draw_rect(g, item, {0.5f,0.5f,0,1});
-        draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, caption);
+
+        if(g.menu_stack.size() > 1)
+        {
+            draw_shadowed_text(g, {item.x0+20, item.y0}, {1,1,1,1}, caption);
+            draw_shadowed_text(g, {item.x0 + 180, item.y0}, {1,1,1,1}, utf8::units(0xf0da).data());
+        }
+        else draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, caption);
+
         if(g.check_click(id, item))
         {
             g.focused_id = g.pressed_id;
@@ -533,7 +543,7 @@ void begin_popup(gui & g, int id, const std::string & caption)
     g.begin_children(id);
 }
 
-bool menu_item(gui & g, const std::string & caption, int mods, int key)
+bool menu_item(gui & g, const std::string & caption, int mods, int key, uint32_t icon)
 {
     if(key && (mods & g.in.mods) == mods && g.in.type == input::key_down && g.in.key == key) return true;
 
@@ -543,7 +553,8 @@ bool menu_item(gui & g, const std::string & caption, int mods, int key)
     if(f.open)
     {
         if(g.is_cursor_over(item)) draw_rect(g, item, {0.5f,0.5f,0,1});
-        draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, caption);
+        if(icon) draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, utf8::units(icon).data());
+        draw_shadowed_text(g, {item.x0+20, item.y0}, {1,1,1,1}, caption);
 
         if(key)
         {

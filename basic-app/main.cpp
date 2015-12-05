@@ -478,26 +478,26 @@ int main(int argc, char * argv[]) try
                 }
                 end_popup(g);
 
-                menu_item(g, "Open", GLFW_MOD_CONTROL, GLFW_KEY_O);
-                menu_item(g, "Save", GLFW_MOD_CONTROL, GLFW_KEY_S);
+                menu_item(g, "Open", GLFW_MOD_CONTROL, GLFW_KEY_O, 0xf115);
+                menu_item(g, "Save", GLFW_MOD_CONTROL, GLFW_KEY_S, 0xf0c7);
                 if(menu_item(g, "Quit", GLFW_MOD_CONTROL, GLFW_KEY_Q)) glfwSetWindowShouldClose(win, 1);
             }
             end_popup(g);
 
             begin_popup(g, 2, "Edit");
             {
-                menu_item(g, "Undo", GLFW_MOD_CONTROL, GLFW_KEY_Z);
-                menu_item(g, "Redo", GLFW_MOD_CONTROL, GLFW_KEY_Y);
+                menu_item(g, "Undo", GLFW_MOD_CONTROL, GLFW_KEY_Z, 0xf0e2);
+                menu_item(g, "Redo", GLFW_MOD_CONTROL, GLFW_KEY_Y, 0xf01e);
 
-                if(menu_item(g, "Cut", GLFW_MOD_CONTROL, GLFW_KEY_X)) g.clip_event = clipboard_event::cut;
-                if(menu_item(g, "Copy", GLFW_MOD_CONTROL, GLFW_KEY_C)) g.clip_event = clipboard_event::copy;
-                if(menu_item(g, "Paste", GLFW_MOD_CONTROL, GLFW_KEY_V))
+                if(menu_item(g, "Cut", GLFW_MOD_CONTROL, GLFW_KEY_X, 0xf0c4)) g.clip_event = clipboard_event::cut;
+                if(menu_item(g, "Copy", GLFW_MOD_CONTROL, GLFW_KEY_C, 0xf0c5)) g.clip_event = clipboard_event::copy;
+                if(menu_item(g, "Paste", GLFW_MOD_CONTROL, GLFW_KEY_V, 0xf0ea))
                 {
                     g.clip_event = clipboard_event::paste;
                     g.clipboard = glfwGetClipboardString(win);
                 }
 
-                if(menu_item(g, "Select All", GLFW_MOD_CONTROL, GLFW_KEY_A))
+                if(menu_item(g, "Select All", GLFW_MOD_CONTROL, GLFW_KEY_A, 0xf245))
                 {
                     selection.clear();
                     for(auto * obj : objects) selection.insert(obj);
@@ -507,7 +507,7 @@ int main(int argc, char * argv[]) try
 
             begin_popup(g, 3, "Help");
             {
-                menu_item(g, "View Help", GLFW_MOD_CONTROL, GLFW_KEY_F1);
+                menu_item(g, "View Help", GLFW_MOD_CONTROL, GLFW_KEY_F1, 0xf059);
             }
             end_popup(g);
         }

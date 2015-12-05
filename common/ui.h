@@ -146,7 +146,7 @@ std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split);
 // Menu support
 void begin_menu(gui & g, int id, const rect & r);
 void begin_popup(gui & g, int id, const std::string & caption);
-bool menu_item(gui & g, const std::string & caption, int mods=0, int key=0);
+bool menu_item(gui & g, const std::string & caption, int mods=0, int key=0, uint32_t icon=0);
 void end_popup(gui & g);
 void end_menu(gui & g);
 
