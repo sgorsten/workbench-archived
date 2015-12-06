@@ -477,10 +477,10 @@ int main(int argc, char * argv[]) try
                     menu_item(g, "Script");
                 }
                 end_popup(g);
-
                 menu_item(g, "Open", GLFW_MOD_CONTROL, GLFW_KEY_O, 0xf115);
                 menu_item(g, "Save", GLFW_MOD_CONTROL, GLFW_KEY_S, 0xf0c7);
-                if(menu_item(g, "Quit", GLFW_MOD_CONTROL, GLFW_KEY_Q)) glfwSetWindowShouldClose(win, 1);
+                menu_seperator(g);
+                if(menu_item(g, "Exit", GLFW_MOD_ALT, GLFW_KEY_F4)) glfwSetWindowShouldClose(win, 1);
             }
             end_popup(g);
 
@@ -488,7 +488,7 @@ int main(int argc, char * argv[]) try
             {
                 menu_item(g, "Undo", GLFW_MOD_CONTROL, GLFW_KEY_Z, 0xf0e2);
                 menu_item(g, "Redo", GLFW_MOD_CONTROL, GLFW_KEY_Y, 0xf01e);
-
+                menu_seperator(g);
                 if(menu_item(g, "Cut", GLFW_MOD_CONTROL, GLFW_KEY_X, 0xf0c4)) g.clip_event = clipboard_event::cut;
                 if(menu_item(g, "Copy", GLFW_MOD_CONTROL, GLFW_KEY_C, 0xf0c5)) g.clip_event = clipboard_event::copy;
                 if(menu_item(g, "Paste", GLFW_MOD_CONTROL, GLFW_KEY_V, 0xf0ea))
@@ -496,7 +496,7 @@ int main(int argc, char * argv[]) try
                     g.clip_event = clipboard_event::paste;
                     g.clipboard = glfwGetClipboardString(win);
                 }
-
+                menu_seperator(g);
                 if(menu_item(g, "Select All", GLFW_MOD_CONTROL, GLFW_KEY_A, 0xf245))
                 {
                     selection.clear();

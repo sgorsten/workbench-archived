@@ -543,6 +543,14 @@ void begin_popup(gui & g, int id, const std::string & caption)
     g.begin_children(id);
 }
 
+void menu_seperator(gui & g)
+{
+    if(g.menu_stack.size() < 2) return;
+    auto & f = g.menu_stack.back();
+    if(f.open) draw_rect(g, {f.r.x0 + 4, f.r.y1 + 1, f.r.x0 + 196, f.r.y1 + 2}, {0.5,0.5,0.5,1});
+    f.r.y1 += 6;
+}
+
 bool menu_item(gui & g, const std::string & caption, int mods, int key, uint32_t icon)
 {
     if(key && (mods & g.in.mods) == mods && g.in.type == input::key_down && g.in.key == key) return true;
