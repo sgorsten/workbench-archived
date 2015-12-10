@@ -81,6 +81,7 @@ struct gui
     camera cam;                     // Current 3D camera used to render the scene
     gizmo_mode gizmode;             // Mode that the gizmo is currently in
     float3 original_position;       // Original position of an object being manipulated with a gizmo
+    float4 original_orientation;    // Original orientation of an object being manipulated with a gizmo
     float3 click_offset;            // Offset from position of grabbed object to coordinates of clicked point
 
     std::vector<menu_stack_frame> menu_stack;

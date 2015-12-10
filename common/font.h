@@ -17,6 +17,24 @@ namespace utf8
     uint32_t code(const char * units); // Assumes units points to the start of a valid utf-8 sequence of code units
     std::array<char,5> units(uint32_t code); // Assumes code < 0x110000
     bool is_valid(const char * units, size_t count); // Return true if the given sequence of code units is valid utf-8
+
+    struct codepoint_iterator 
+    { 
+        const char * p;
+        uint32_t operator * () const { return code(p); }
+        codepoint_iterator & operator ++ () { p = next(p); return *this; }
+        bool operator != (const codepoint_iterator & r) const { return p != r.p; }
+    };
+
+    struct string_view
+    {
+        const char * first, * last;
+        string_view() : first(), last() {}
+        string_view(const std::string & s) : first(s.data()), last(s.data() + s.size()) {}
+        template<int N> string_view(const char (& s)[N]) : first(s), last(s + N) {}
+        codepoint_iterator begin() const { return {first}; }
+        codepoint_iterator end() const { return {last}; }
+    };
 }
 
 struct glyph_data

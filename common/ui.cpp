@@ -739,8 +739,67 @@ void position_gizmo(gui & g, int id, float3 & position)
     }
 }
 
+void axis_rotation_dragger(gui & g, const float3 & axis, const float3 & center, float4 & orientation)
+{
+    if(g.ml)
+    {
+        pose original_pose = {g.original_orientation, g.original_position};
+        float3 the_axis = original_pose.transform_vector(axis);
+        float4 the_plane = {the_axis, -dot(the_axis, g.click_offset)};
+        const ray the_ray = g.get_ray_from_cursor();
+
+        float t;
+        if(intersect_ray_plane(the_ray, the_plane, &t))
+        {
+            float3 center_of_rotation = g.original_position + the_axis * dot(the_axis, g.click_offset - g.original_position);
+            float3 arm1 = normalize(g.click_offset - center_of_rotation);
+            float3 arm2 = normalize(the_ray.origin + the_ray.direction * t - center_of_rotation); 
+
+            float d = dot(arm1, arm2);
+            if(d > 0.999f) { orientation = g.original_orientation; return; }
+            float angle = std::acos(d);
+            if(angle < 0.001f) { orientation = g.original_orientation; return; }
+            auto a = normalize(cross(arm1, arm2));
+            orientation = qmul(rotation_quat(a, angle), g.original_orientation);
+        }
+    }
+}
+
 void orientation_gizmo(gui & g, int id, const float3 & center, float4 & orientation)
 {
+    auto p = pose(orientation, center);
+    // On click, set the gizmo mode based on which component the user clicked on
+    if(g.in.type == input::mouse_down && g.in.button == GLFW_MOUSE_BUTTON_LEFT)
+    {
+        g.gizmode = gizmo_mode::none;
+        auto ray = detransform(p, g.get_ray_from_cursor());
+        float best_t = std::numeric_limits<float>::infinity(), t;           
+        if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[6], &t) && t < best_t) { g.gizmode = gizmo_mode::rotate_yz; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[7], &t) && t < best_t) { g.gizmode = gizmo_mode::rotate_zx; best_t = t; }
+        if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[8], &t) && t < best_t) { g.gizmode = gizmo_mode::rotate_xy; best_t = t; }
+        if(g.gizmode != gizmo_mode::none)
+        {
+            g.original_position = center;
+            g.original_orientation = orientation;
+            g.click_offset = p.transform_point(ray.origin + ray.direction*t);
+            g.set_pressed(id);
+        }
+    }
+
+    // If the user has previously clicked on a gizmo component, allow the user to interact with that gizmo
+    if(g.is_pressed(id))
+    {
+        switch(g.gizmode)
+        {
+        case gizmo_mode::rotate_yz: axis_rotation_dragger(g, {1,0,0}, center, orientation); break;
+        case gizmo_mode::rotate_zx: axis_rotation_dragger(g, {0,1,0}, center, orientation); break;
+        case gizmo_mode::rotate_xy: axis_rotation_dragger(g, {0,0,1}, center, orientation); break;
+        }
+    }
+
+    // On release, deactivate the current gizmo mode
+    if(g.check_release(id)) g.gizmode = gizmo_mode::none;
+
     // Add the gizmo to our 3D draw list
     const float3 colors[] = {
         g.gizmode == gizmo_mode::rotate_yz ? float3(0.5f,1,1) : float3(0,1,1),
@@ -748,12 +807,12 @@ void orientation_gizmo(gui & g, int id, const float3 & center, float4 & orientat
         g.gizmode == gizmo_mode::rotate_xy ? float3(1,1,0.5f) : float3(1,1,0),   
     };
 
-    auto model = translation_matrix(center) * rotation_matrix(orientation), modelIT = inverse(transpose(model));
+    const auto model = p.matrix();
     for(int i=6; i<9; ++i)
     {
         g.draw.begin_object(g.gizmo_res.meshes[i], g.gizmo_res.program);
         g.draw.set_uniform("u_model", model);
-        g.draw.set_uniform("u_modelIT", modelIT);
+        g.draw.set_uniform("u_modelIT", model); // No scaling, no need to inverse-transpose
         g.draw.set_uniform("u_diffuseMtl", colors[i-6]);
     }
 }

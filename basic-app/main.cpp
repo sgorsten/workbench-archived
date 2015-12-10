@@ -153,11 +153,11 @@ struct gui_resources
 struct scene_object
 {
     std::string name;
-    float3 position;
+    pose p;
 
-    scene_object(std::string name, float3 position) : name(name), position(position) {}
+    scene_object(std::string name, float3 position) : name(name), p(position) {}
 
-    float4x4 get_model_matrix() const { return translation_matrix(position); }
+    float4x4 get_model_matrix() const { return p.matrix(); }
     virtual bool intersect_ray(ray r, float * t) const { return false; }
     virtual void draw(draw_list & list) const {}
     virtual void on_gui(gui & g, const rect & r, int offset) = 0;
@@ -178,7 +178,7 @@ struct point_light : public scene_object
         edit(g, 1, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
         y0 += line_height + 4;
         draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
-        edit(g, 2, {mid + 2, y0, r.x1 - 4, y0 + line_height}, position);
+        edit(g, 2, {mid + 2, y0, r.x1 - 4, y0 + line_height}, p.position);
         y0 += line_height + 4;
         draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Color");
         edit(g, 3, {mid + 2, y0, r.x1 - 4, y0 + line_height}, color);
@@ -197,8 +197,7 @@ struct static_mesh : public scene_object
 
     bool intersect_ray(ray r, float * t) const
     {
-        r.origin -= position;
-        return intersect_ray_mesh(r, *mesh, t);
+        return intersect_ray_mesh(detransform(p, r), *mesh, t);
     }
 
     void draw(draw_list & list) const
@@ -219,7 +218,7 @@ struct static_mesh : public scene_object
         edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
         y0 += line_height + 4;
         draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
-        edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, position);
+        edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, p.position);
         y0 += line_height + 4;
         
         for(auto & u : mat.get_block_desc()->uniforms)
@@ -252,7 +251,7 @@ scene_object * raycast(const ray & ray, const std::vector<scene_object *> & obje
 float3 get_center_of_mass(const std::set<scene_object *> & objects)
 {
     float3 sum;
-    for(auto obj : objects) sum += obj->position;
+    for(auto obj : objects) sum += obj->p.position;
     return sum / (float)objects.size();
 }
 
@@ -307,9 +306,11 @@ void viewport_ui(gui & g, int id, rect r, std::vector<scene_object *> & objects,
     if(!selection.empty())
     {
         g.begin_children(id);
-        float3 com = get_center_of_mass(selection), new_com = com;
-        position_gizmo(g, 1, new_com);
-        if(new_com != com) for(auto obj : selection) obj->position += new_com - com;
+        auto * obj = *selection.begin();
+        orientation_gizmo(g, 1, obj->p.position, obj->p.orientation);
+        //float3 com = get_center_of_mass(selection), new_com = com;
+        //position_gizmo(g, 1, new_com);
+        //if(new_com != com) for(auto obj : selection) obj->p.position += new_com - com;
         g.end_children();
     }
     if(g.is_child_pressed(id)) return;
@@ -537,7 +538,7 @@ int main(int argc, char * argv[]) try
         std::vector<byte> scene_buffer(per_scene->data_size);
         per_scene->set_uniform(scene_buffer.data(), "u_viewProj", g.get_viewproj_matrix());
         per_scene->set_uniform(scene_buffer.data(), "u_eyePos", g.cam.position);
-        per_scene->set_uniform(scene_buffer.data(), "u_lightPos", plight->position);
+        per_scene->set_uniform(scene_buffer.data(), "u_lightPos", plight->p.position);
         per_scene->set_uniform(scene_buffer.data(), "u_lightColor", plight->color);
 
         draw_list list;
