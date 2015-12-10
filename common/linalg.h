@@ -196,4 +196,13 @@ namespace linalg
     }
 }
 
+struct rect 
+{ 
+    int x0, y0, x1, y1; 
+    int width() const { return x1 - x0; }
+    int height() const { return y1 - y0; }
+    linalg::aliases::int2 dims() const { return {width(), height()}; }
+    float aspect_ratio() const { return (float)width()/height(); }
+};
+
 #endif

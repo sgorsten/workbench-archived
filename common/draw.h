@@ -100,15 +100,6 @@ namespace gfx
 }
 
 // These types do not make any OpenGL calls. Lists can be freely composited in parallel, from background threads, etc.
-struct rect 
-{ 
-    int x0, y0, x1, y1; 
-    int width() const { return x1 - x0; }
-    int height() const { return y1 - y0; }
-    int2 dims() const { return {width(), height()}; }
-    float aspect_ratio() const { return (float)width()/height(); }
-};
-
 class material
 {
     std::shared_ptr<const gfx::program> program;
