@@ -34,6 +34,10 @@ void draw_buffer_2d::end_frame()
 {
     lists.back().last = indices.size();
     std::stable_sort(begin(lists), end(lists), [](const list & a, const list & b) { return a.level < b.level; });
+
+    out_indices.clear();
+    out_indices.reserve(indices.size());
+    for(auto & list : lists) out_indices.insert(end(out_indices), indices.data() + list.first, indices.data() + list.last);
 }
 
 void draw_buffer_2d::begin_overlay()

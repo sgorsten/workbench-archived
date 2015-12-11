@@ -5,7 +5,7 @@
 
 void draw_tooltip(draw_buffer_2d & buffer, const int2 & loc, utf8::string_view text)
 {
-    int w = buffer.library->default_font.get_text_width(text), h = buffer.library->default_font.line_height;
+    int w = buffer.get_library().default_font.get_text_width(text), h = buffer.get_library().default_font.line_height;
 
     buffer.begin_overlay();
     buffer.draw_partial_rounded_rect({loc.x+10, loc.y, loc.x+w+20, loc.y+h+10}, 8, {0.5f,0.5f,0.5f,1}, 0, 1, 1, 1);
@@ -37,14 +37,14 @@ struct node_type
             const auto loc = get_input_location(r,i);
             buffer.draw_circle(loc, 8, {1,1,1,1});
             buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
-            buffer.draw_shadowed_text(loc + int2(12, -buffer.library->default_font.line_height/2), inputs[i], {1,1,1,1});
+            buffer.draw_shadowed_text(loc + int2(12, -buffer.get_library().default_font.line_height/2), inputs[i], {1,1,1,1});
         }
         for(size_t i=0; i<outputs.size(); ++i)
         {
             const auto loc = get_output_location(r,i);
             buffer.draw_circle(loc, 8, {1,1,1,1});
             buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
-            buffer.draw_shadowed_text(loc + int2(-12 - buffer.library->default_font.get_text_width(outputs[i]), -buffer.library->default_font.line_height/2), outputs[i], {1,1,1,1});
+            buffer.draw_shadowed_text(loc + int2(-12 - buffer.get_library().default_font.get_text_width(outputs[i]), -buffer.get_library().default_font.line_height/2), outputs[i], {1,1,1,1});
 
             if(i == 1) draw_tooltip(buffer, loc, "Tooltip in an overlay");
         }
@@ -146,10 +146,10 @@ void render_draw_buffer_opengl(const draw_buffer_2d & buffer, GLuint sprite_text
     glEnable(GL_BLEND); 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     for(GLenum array : {GL_VERTEX_ARRAY, GL_TEXTURE_COORD_ARRAY, GL_COLOR_ARRAY}) glEnableClientState(array);
-    glVertexPointer(2, GL_FLOAT, sizeof(draw_buffer_2d::vertex), &buffer.vertices.data()->position);
-    glTexCoordPointer(2, GL_FLOAT, sizeof(draw_buffer_2d::vertex), &buffer.vertices.data()->texcoord);
-    glColorPointer(4, GL_FLOAT, sizeof(draw_buffer_2d::vertex), &buffer.vertices.data()->color);
-    for(auto & list : buffer.lists) glDrawElements(GL_TRIANGLES, list.last - list.first, GL_UNSIGNED_SHORT, buffer.indices.data() + list.first);
+    glVertexPointer(2, GL_FLOAT, sizeof(draw_buffer_2d::vertex), &buffer.get_vertices().data()->position);
+    glTexCoordPointer(2, GL_FLOAT, sizeof(draw_buffer_2d::vertex), &buffer.get_vertices().data()->texcoord);
+    glColorPointer(4, GL_FLOAT, sizeof(draw_buffer_2d::vertex), &buffer.get_vertices().data()->color);
+    glDrawElements(GL_TRIANGLES, buffer.get_indices().size(), GL_UNSIGNED_SHORT, buffer.get_indices().data());
     for(GLenum array : {GL_VERTEX_ARRAY, GL_TEXTURE_COORD_ARRAY, GL_COLOR_ARRAY}) glDisableClientState(array);
     glPopAttrib();
 }

@@ -18,17 +18,14 @@ struct sprite_library
 
 // The purpose of this class is to support a handful of basic 2D drawing operations (rectangles, circles, rounded rectangles, lines, bezier curves, and text)
 // The resultant geometry is coalesced into a single vertex/index buffer which can be rendered via a single draw call.
-struct draw_buffer_2d
+class draw_buffer_2d
 {
+public:
     struct vertex { float2 position, texcoord; float4 color; };
-    struct list { size_t level,first,last; };
 
-    const sprite_library * library;
-    std::vector<vertex> vertices;
-    std::vector<uint16_t> indices;
-    std::vector<list> lists;
-    std::vector<rect> scissor;
-    float2 scale, translate;
+    const sprite_library & get_library() const { return *library; }
+    const std::vector<vertex> & get_vertices() const { return vertices; }
+    const std::vector<uint16_t> & get_indices() const { return out_indices; }
 
     void begin_frame(const sprite_library & library, const int2 & window_size);
     void end_frame();
@@ -50,6 +47,15 @@ struct draw_buffer_2d
     void draw_sprite(const rect & r, float s0, float t0, float s1, float t1, const float4 & color);
     void draw_text(int2 p, utf8::string_view text, const float4 & color);
     void draw_shadowed_text(int2 p, utf8::string_view text, const float4 & color);
+
+private:
+    struct list { size_t level,first,last; };
+    const sprite_library * library;
+    std::vector<vertex> vertices;
+    std::vector<uint16_t> indices, out_indices;
+    std::vector<list> lists;
+    std::vector<rect> scissor;
+    float2 scale, translate;
 };
 
 #endif
