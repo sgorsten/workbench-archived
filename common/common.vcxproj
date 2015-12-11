@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="draw.h" />
+    <ClInclude Include="draw2D.h" />
     <ClInclude Include="font.h" />
     <ClInclude Include="geometry.h" />
     <ClInclude Include="input.h" />
@@ -30,6 +31,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="draw.cpp" />
+    <ClCompile Include="draw2D.cpp" />
     <ClCompile Include="font.cpp" />
     <ClCompile Include="geometry.cpp" />
     <ClCompile Include="input.cpp" />

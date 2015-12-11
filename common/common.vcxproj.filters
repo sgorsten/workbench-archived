@@ -9,6 +9,7 @@
     <ClInclude Include="input.h" />
     <ClInclude Include="draw.h" />
     <ClInclude Include="load.h" />
+    <ClInclude Include="draw2D.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="font.cpp" />
@@ -18,6 +19,7 @@
     <ClCompile Include="input.cpp" />
     <ClCompile Include="draw.cpp" />
     <ClCompile Include="load.cpp" />
+    <ClCompile Include="draw2D.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
