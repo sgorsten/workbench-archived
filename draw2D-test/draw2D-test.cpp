@@ -3,6 +3,17 @@
 #include "draw2D.h"
 #include <cassert>
 
+void draw_tooltip(draw_buffer_2d & buffer, const int2 & loc, utf8::string_view text)
+{
+    int w = buffer.library->default_font.get_text_width(text), h = buffer.library->default_font.line_height;
+
+    buffer.begin_overlay();
+    buffer.draw_partial_rounded_rect({loc.x+10, loc.y, loc.x+w+20, loc.y+h+10}, 8, {0.5f,0.5f,0.5f,1}, 0, 1, 1, 1);
+    buffer.draw_partial_rounded_rect({loc.x+11, loc.y+1, loc.x+w+19, loc.y+h+9}, 7, {0.3f,0.3f,0.3f,1}, 0, 1, 1, 1);
+    buffer.draw_shadowed_text({loc.x+15, loc.y+5}, text, {1,1,1,1});
+    buffer.end_overlay();
+}
+
 struct node_type
 {
     static const int corner_radius = 10;
@@ -34,6 +45,8 @@ struct node_type
             buffer.draw_circle(loc, 8, {1,1,1,1});
             buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
             buffer.draw_shadowed_text(loc + int2(-12 - buffer.library->default_font.get_text_width(outputs[i]), -buffer.library->default_font.line_height/2), outputs[i], {1,1,1,1});
+
+            if(i == 1) draw_tooltip(buffer, loc, "Tooltip in an overlay");
         }
     }
 };
@@ -101,6 +114,7 @@ int main()
         buffer.begin_frame(sprites, {w, h});
         for(auto & n : nodes) n.draw(buffer);
         for(auto & e : edges) e.draw(buffer);
+        buffer.end_frame();
 
         glClear(GL_COLOR_BUFFER_BIT);
         render_draw_buffer_opengl(buffer, tex);
@@ -135,7 +149,7 @@ void render_draw_buffer_opengl(const draw_buffer_2d & buffer, GLuint sprite_text
     glVertexPointer(2, GL_FLOAT, sizeof(draw_buffer_2d::vertex), &buffer.vertices.data()->position);
     glTexCoordPointer(2, GL_FLOAT, sizeof(draw_buffer_2d::vertex), &buffer.vertices.data()->texcoord);
     glColorPointer(4, GL_FLOAT, sizeof(draw_buffer_2d::vertex), &buffer.vertices.data()->color);
-    glDrawElements(GL_TRIANGLES, buffer.indices.size(), GL_UNSIGNED_SHORT, buffer.indices.data());
+    for(auto & list : buffer.lists) glDrawElements(GL_TRIANGLES, list.last - list.first, GL_UNSIGNED_SHORT, buffer.indices.data() + list.first);
     for(GLenum array : {GL_VERTEX_ARRAY, GL_TEXTURE_COORD_ARRAY, GL_COLOR_ARRAY}) glDisableClientState(array);
     glPopAttrib();
 }

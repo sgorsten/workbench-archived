@@ -81,28 +81,28 @@ const glyph_data * font::get_glyph(int codepoint) const
     return &it->second;
 }
 
-int font::get_text_width(const std::string & text) const
+int font::get_text_width(utf8::string_view text) const
 {         
     int width = 0;
-    for(const char * it = text.data(), * e = it + text.size(); it != e; it = utf8::next(it))
+    for(auto codepoint : text)
     {
-        auto g = glyphs.find(utf8::code(it));
+        auto g = glyphs.find(codepoint);
         if(g == end(glyphs)) continue;
         width += g->second.advance;
     }
     return width;
 }
 
-std::string::size_type font::get_cursor_pos(const std::string & text, int x) const
+std::string::size_type font::get_cursor_pos(utf8::string_view text, int x) const
 {
-    for(const char * it = text.data(), * e = it + text.size(); it != e; it = utf8::next(it))
+    for(auto it = text.begin(); it != text.end(); ++it)
     {
-        auto g = glyphs.find(utf8::code(it));
+        auto g = glyphs.find(*it);
         if(g == end(glyphs)) continue;
-        if(x*2 < g->second.advance) return it - text.data();
+        if(x*2 < g->second.advance) return it.p - text.first;
         x -= g->second.advance;
     }
-    return text.size();
+    return text.last - text.first;
 }
 
 void font::load_glyphs(const std::string & path, int size, const std::vector<int> & codepoints)

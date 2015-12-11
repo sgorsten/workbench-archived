@@ -27,11 +27,15 @@ struct draw_buffer_2d
     std::vector<vertex> vertices;
     std::vector<uint16_t> indices;
     std::vector<list> lists;
-    float sx,sy;
-    rect scissor;
+    std::vector<rect> scissor;
+    float2 scale, translate;
 
     void begin_frame(const sprite_library & library, const int2 & window_size);
     void end_frame();
+    void begin_overlay();
+    void end_overlay();
+    void begin_scissor(const rect & r);
+    void end_scissor();
 
     void draw_quad(const vertex & v0, const vertex & v1, const vertex & v2, const vertex & v3);
 

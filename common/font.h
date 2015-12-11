@@ -55,8 +55,8 @@ public:
     int line_height, baseline;
 
     const glyph_data * get_glyph(int codepoint) const;
-    int get_text_width(const std::string & text) const;
-    std::string::size_type get_cursor_pos(const std::string & text, int x) const;
+    int get_text_width(utf8::string_view text) const;
+    std::string::size_type get_cursor_pos(utf8::string_view text, int x) const;
 
     void load_glyphs(const std::string & path, int size, const std::vector<int> & codepoints);
 };

@@ -24,15 +24,41 @@ void draw_buffer_2d::begin_frame(const sprite_library & library, const int2 & wi
     this->library = &library;
     vertices.clear();
     indices.clear();
-    lists.clear();
-    scissor = {0, 0, window_size.x, window_size.y};
-    sx = 2.0f / window_size.x;
-    sy = 2.0f / window_size.y;
+    lists = {{0, 0}};
+    scissor = {{0, 0, window_size.x, window_size.y}};
+    scale = {2.0f / window_size.x, -2.0f / window_size.y};
+    translate = {-1, +1};
 }
 
 void draw_buffer_2d::end_frame()
 {
+    lists.back().last = indices.size();
+    std::stable_sort(begin(lists), end(lists), [](const list & a, const list & b) { return a.level < b.level; });
+}
 
+void draw_buffer_2d::begin_overlay()
+{
+    lists.back().last = indices.size();
+    lists.push_back({lists.back().level + 1, indices.size()});
+    scissor.push_back(scissor.front()); // Overlays are not constrained by parent scissor rect
+}
+
+void draw_buffer_2d::end_overlay()
+{
+    scissor.pop_back();
+    lists.back().last = indices.size();
+    lists.push_back({lists.back().level - 1, indices.size()});
+}
+
+void draw_buffer_2d::begin_scissor(const rect & r)
+{
+    const auto & s = scissor.back();
+    scissor.push_back({std::max(s.x0, r.x0), std::max(s.y0, r.y0), std::min(s.x1, r.x1), std::min(s.y1, r.y1)});
+}
+
+void draw_buffer_2d::end_scissor()
+{
+    scissor.pop_back();
 }
 
 static size_t clip_polygon(draw_buffer_2d::vertex (& out)[8], const draw_buffer_2d::vertex in[], size_t in_size, const float3 & plane)
@@ -61,10 +87,10 @@ static size_t clip_polygon(draw_buffer_2d::vertex (& out)[8], const draw_buffer_
 void draw_buffer_2d::draw_quad(const vertex & v0, const vertex & v1, const vertex & v2, const vertex & v3)
 {
     vertex a[8] = {v0, v1, v2, v3}, b[8];
-    size_t n = clip_polygon(b, a, 4, float3(+1,  0, -scissor.x0));
-    n = clip_polygon(a, b, n, float3( 0, +1, -scissor.y0));
-    n = clip_polygon(b, a, n, float3(-1,  0, +scissor.x1));
-    n = clip_polygon(a, b, n, float3( 0, -1, +scissor.y1));
+    size_t n = clip_polygon(b, a, 4, float3(+1,  0, -scissor.back().x0));
+    n = clip_polygon(a, b, n, float3( 0, +1, -scissor.back().y0));
+    n = clip_polygon(b, a, n, float3(-1,  0, +scissor.back().x1));
+    n = clip_polygon(a, b, n, float3( 0, -1, +scissor.back().y1));
     if(vertices.size() + n > 0x10000) throw std::runtime_error("draw buffer overflow");
     const uint16_t base = vertices.size();
     for(uint16_t i=2; i<n; ++i)
@@ -73,10 +99,7 @@ void draw_buffer_2d::draw_quad(const vertex & v0, const vertex & v1, const verte
         indices.push_back(base+i-1);
         indices.push_back(base+i);
     }
-    for(auto it = a, end = a + n; it != end; ++it)
-    {
-        vertices.push_back({{it->position.x*sx-1, 1-it->position.y*sy}, it->texcoord, it->color});
-    }
+    for(auto it = a, end = a + n; it != end; ++it) vertices.push_back({it->position * scale + translate, it->texcoord, it->color});
 }
 
 void draw_buffer_2d::draw_sprite(const rect & r, float s0, float t0, float s1, float t1, const float4 & color)
