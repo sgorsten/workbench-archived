@@ -30,6 +30,11 @@ void draw_buffer_2d::begin_frame(const sprite_library & library, const int2 & wi
     sy = 2.0f / window_size.y;
 }
 
+void draw_buffer_2d::end_frame()
+{
+
+}
+
 static size_t clip_polygon(draw_buffer_2d::vertex (& out)[8], const draw_buffer_2d::vertex in[], size_t in_size, const float3 & plane)
 {
     size_t out_size = 0;
@@ -53,59 +58,52 @@ static size_t clip_polygon(draw_buffer_2d::vertex (& out)[8], const draw_buffer_
     return out_size;
 }
 
-void draw_buffer_2d::emit_polygon(const vertex * verts, size_t vert_count)
+void draw_buffer_2d::draw_quad(const vertex & v0, const vertex & v1, const vertex & v2, const vertex & v3)
 {
-    assert(vert_count <= 4);
-    vertex verts_a[8], verts_b[8];
-    vert_count = clip_polygon(verts_a, verts,   vert_count, float3(+1,  0, -scissor.x0));
-    vert_count = clip_polygon(verts_b, verts_a, vert_count, float3( 0, +1, -scissor.y0));
-    vert_count = clip_polygon(verts_a, verts_b, vert_count, float3(-1,  0, +scissor.x1));
-    vert_count = clip_polygon(verts_b, verts_a, vert_count, float3( 0, -1, +scissor.y1));
-    if(vertices.size() + vert_count > 0x10000) throw std::runtime_error("draw buffer overflow");
+    vertex a[8] = {v0, v1, v2, v3}, b[8];
+    size_t n = clip_polygon(b, a, 4, float3(+1,  0, -scissor.x0));
+    n = clip_polygon(a, b, n, float3( 0, +1, -scissor.y0));
+    n = clip_polygon(b, a, n, float3(-1,  0, +scissor.x1));
+    n = clip_polygon(a, b, n, float3( 0, -1, +scissor.y1));
+    if(vertices.size() + n > 0x10000) throw std::runtime_error("draw buffer overflow");
     const uint16_t base = vertices.size();
-    for(uint16_t i=2; i<vert_count; ++i)
+    for(uint16_t i=2; i<n; ++i)
     {
         indices.push_back(base);
         indices.push_back(base+i-1);
         indices.push_back(base+i);
     }
-    for(auto it = verts_b, end = verts_b + vert_count; it != end; ++it)
+    for(auto it = a, end = a + n; it != end; ++it)
     {
         vertices.push_back({{it->position.x*sx-1, 1-it->position.y*sy}, it->texcoord, it->color});
     }
 }
 
-void draw_buffer_2d::emit_rect(int x0, int y0, int x1, int y1, float s0, float t0, float s1, float t1, const float4 & color)
+void draw_buffer_2d::draw_sprite(const rect & r, float s0, float t0, float s1, float t1, const float4 & color)
 {
-    const vertex verts[] = {
-        {{(float)x0,(float)y0}, {s0,t0}, color},
-        {{(float)x1,(float)y0}, {s1,t0}, color},
-        {{(float)x1,(float)y1}, {s1,t1}, color},
-        {{(float)x0,(float)y1}, {s0,t1}, color}
-    };
-    emit_polygon(verts, 4);
+    draw_quad({{static_cast<float>(r.x0), static_cast<float>(r.y0)}, {s0,t0}, color},
+              {{static_cast<float>(r.x1), static_cast<float>(r.y0)}, {s1,t0}, color},
+              {{static_cast<float>(r.x1), static_cast<float>(r.y1)}, {s1,t1}, color},
+              {{static_cast<float>(r.x0), static_cast<float>(r.y1)}, {s0,t1}, color});
 }
 
-void draw_line(draw_buffer_2d & buffer, const float2 & p0, const float2 & p1, float width, const float4 & color)
+void draw_buffer_2d::draw_line(const float2 & p0, const float2 & p1, int width, const float4 & color)
 {
-    auto it = buffer.library->line_sprites.find(width);
-    if(it == end(buffer.library->line_sprites)) return;
-    const auto & sprite = buffer.library->sheet.get_sprite(it->second);
+    auto it = library->line_sprites.find(width);
+    if(it == end(library->line_sprites)) return;
+    const auto & sprite = library->sheet.get_sprite(it->second);
     const float2 perp = normalize(cross(float3(p1-p0,0), float3(0,0,1)).xy()) * ((width+2) * 0.5f);
-    const draw_buffer_2d::vertex verts[] = {
-        {p0+perp, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
-        {p1+perp, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+    draw_quad({p0+perp, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
+        {p0-perp, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
         {p1-perp, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-        {p0-perp, {sprite.s0, (sprite.t0+sprite.t1)/2}, color}
-    };
-    buffer.emit_polygon(verts, 4);
+        {p1+perp, {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
 }
 
-void draw_bezier_curve(draw_buffer_2d & buffer, const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color)
+void draw_buffer_2d::draw_bezier_curve(const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color)
 {
-    auto it = buffer.library->line_sprites.find(width);
-    if(it == end(buffer.library->line_sprites)) return;
-    const auto & sprite = buffer.library->sheet.get_sprite(it->second);
+    auto it = library->line_sprites.find(width);
+    if(it == end(library->line_sprites)) return;
+    const auto & sprite = library->sheet.get_sprite(it->second);
     const float2 d01 = p1-p0, d12 = p2-p1, d23 = p3-p2;
     float2 v0, v1;
     for(float i=0; i<=32; ++i)
@@ -114,80 +112,77 @@ void draw_bezier_curve(draw_buffer_2d & buffer, const float2 & p0, const float2 
         const float2 p = p0*(s*s*s) + p1*(3*s*s*t) + p2*(3*s*t*t) + p3*(t*t*t);
         const float2 d = normalize(d01*(3*s*s) + d12*(6*s*t) + d23*(3*t*t)) * ((width+2) * 0.5f);
         const float2 v2 = {p.x-d.y, p.y+d.x}, v3 = {p.x+d.y, p.y-d.x};
-        if(i)
-        {
-            const draw_buffer_2d::vertex verts[] = {
-                {v0, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
-                {v1, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-                {v2, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-                {v3, {sprite.s0, (sprite.t0+sprite.t1)/2}, color}
-            };
-            buffer.emit_polygon(verts, 4);
-        }
+        if(i) draw_quad({v0, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
+            {v1, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+            {v2, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+            {v3, {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
         v0 = v3;
         v1 = v2;
     }
 }
 
-void draw_rect(draw_buffer_2d & buffer, const rect & r, const float4 & top_color, const float4 & bottom_color)
+void draw_buffer_2d::draw_rect(const rect & r, const float4 & color)
 {
-    const auto & sprite = buffer.library->sheet.get_sprite(0);
+    const auto & sprite = library->sheet.get_sprite(0);
     float s = (sprite.s0+sprite.s1)/2, t = (sprite.t0+sprite.t1)/2;
-    buffer.emit_rect(r.x0, r.y0, r.x1, r.y1, s, t, s, t, top_color); //, bottom_color);
+    draw_sprite({r.x0, r.y0, r.x1, r.y1}, s, t, s, t, color);
 }
-void draw_rect(draw_buffer_2d & buffer, const rect & r, const float4 & color) { draw_rect(buffer, r, color, color); }
 
-void draw_rounded_rect_top(draw_buffer_2d & buffer, const rect & r, const float4 & top_color, const float4 & bottom_color)
+static rect take_x0(rect & r, int x) { rect r2 = {r.x0, r.y0, r.x0+x, r.y1}; r.x0 = r2.x1; return r2; }
+static rect take_x1(rect & r, int x) { rect r2 = {r.x1-x, r.y0, r.x1, r.y1}; r.x1 = r2.x0; return r2; }
+static rect take_y0(rect & r, int y) { rect r2 = {r.x0, r.y0, r.x1, r.y0+y}; r.y0 = r2.y1; return r2; }
+static rect take_y1(rect & r, int y) { rect r2 = {r.x0, r.y1-y, r.x1, r.y1}; r.y1 = r2.y0; return r2; }
+void draw_buffer_2d::draw_partial_rounded_rect(rect r, int radius, const float4 & color, bool tl, bool tr, bool bl, bool br)
 {
-    const int radius = r.height();
-    draw_rect(buffer, {r.x0+radius, r.y0, r.x1-radius, r.y0+radius}, top_color, bottom_color);
-    auto it = buffer.library->corner_sprites.find(radius);
-    if(it == end(buffer.library->corner_sprites)) return;
-    auto & sprite = buffer.library->sheet.get_sprite(it->second);
-    buffer.emit_rect(r.x0, r.y0, r.x0+radius, r.y0+radius, sprite.s1, sprite.t1, sprite.s0, sprite.t0, top_color); //, bottom_color);
-    buffer.emit_rect(r.x1-radius, r.y0, r.x1, r.y0+radius, sprite.s0, sprite.t1, sprite.s1, sprite.t0, top_color); //, bottom_color);
+    auto it = library->corner_sprites.find(radius);
+    if(it == end(library->corner_sprites)) return;
+    auto & sprite = library->sheet.get_sprite(it->second);
+    
+    if(tl || tr)
+    {
+        rect r2 = take_y0(r, radius);
+        if(tl) draw_sprite(take_x0(r2, radius), sprite.s1, sprite.t1, sprite.s0, sprite.t0, color);    
+        if(tr) draw_sprite(take_x1(r2, radius), sprite.s0, sprite.t1, sprite.s1, sprite.t0, color);
+        draw_rect(r2, color);
+    }
+
+    if(bl || br)
+    {
+        rect r2 = take_y1(r, radius);
+        if(bl) draw_sprite(take_x0(r2, radius), sprite.s1, sprite.t0, sprite.s0, sprite.t1, color);
+        if(br) draw_sprite(take_x1(r2, radius), sprite.s0, sprite.t0, sprite.s1, sprite.t1, color);
+        draw_rect(r2, color);
+    }
+
+    draw_rect(r, color);
 }
 
-void draw_rounded_rect_bottom(draw_buffer_2d & buffer, const rect & r, const float4 & top_color, const float4 & bottom_color)
+void draw_buffer_2d::draw_rounded_rect(const rect & r, int radius, const float4 & color)
 {
-    const int radius = r.height();
-    draw_rect(buffer, {r.x0+radius, r.y1-radius, r.x1-radius, r.y1}, top_color, bottom_color);
-    auto it = buffer.library->corner_sprites.find(radius);
-    if(it == end(buffer.library->corner_sprites)) return;
-    auto & sprite = buffer.library->sheet.get_sprite(it->second);
-    buffer.emit_rect(r.x0, r.y1-radius, r.x0+radius, r.y1, sprite.s1, sprite.t0, sprite.s0, sprite.t1, top_color); //, bottom_color);
-    buffer.emit_rect(r.x1-radius, r.y1-radius, r.x1, r.y1, sprite.s0, sprite.t0, sprite.s1, sprite.t1, top_color); //, bottom_color);
+    draw_partial_rounded_rect(r, radius, color, true, true, true, true);
 }
 
-void draw_rounded_rect(draw_buffer_2d & buffer, const rect & r, int radius, const float4 & top_color, const float4 & bottom_color)
-{
-    assert(radius >= 0);
-    const float4 c1 = lerp(top_color, bottom_color, (float)radius/r.height());
-    const float4 c2 = lerp(bottom_color, top_color, (float)radius/r.height());
-    draw_rounded_rect_top(buffer, {r.x0, r.y0, r.x1, r.y0+radius}, top_color, c1);
-    draw_rect(buffer, {r.x0, r.y0+radius, r.x1, r.y1-radius}, c1, c2);        
-    draw_rounded_rect_bottom(buffer, {r.x0, r.y1-radius, r.x1, r.y1}, c2, bottom_color);
+void draw_buffer_2d::draw_circle(const int2 & center, int radius, const float4 & color) 
+{ 
+    draw_rounded_rect({center.x-radius, center.y-radius, center.x+radius, center.y+radius}, radius, color);
 }
-void draw_rounded_rect(draw_buffer_2d & buffer, const rect & r, int radius, const float4 & color) { draw_rounded_rect(buffer, r, radius, color, color); }
 
-void draw_circle(draw_buffer_2d & buffer, const int2 & center, int radius, const float4 & color) { draw_rounded_rect(buffer, {center.x-radius, center.y-radius, center.x+radius, center.y+radius}, radius, color, color); }
-
-void draw_text(draw_buffer_2d & buffer, int2 p, utf8::string_view text, const float4 & color)
+void draw_buffer_2d::draw_text(int2 p, utf8::string_view text, const float4 & color)
 {
     for(auto codepoint : text)
     {
-        if(auto * g = buffer.library->default_font.get_glyph(codepoint))
+        if(auto * g = library->default_font.get_glyph(codepoint))
         {
-            auto & s = buffer.library->sheet.get_sprite(g->sprite_index);
+            auto & s = library->sheet.get_sprite(g->sprite_index);
             const int2 p0 = p + g->offset, p1 = p0 + s.dims;
-            buffer.emit_rect(p0.x, p0.y, p1.x, p1.y, s.s0, s.t0, s.s1, s.t1, color);
+            draw_sprite({p0.x, p0.y, p1.x, p1.y}, s.s0, s.t0, s.s1, s.t1, color);
             p.x += g->advance;
         }
     }
 }
 
-void draw_shadowed_text(draw_buffer_2d & buffer, int2 p, utf8::string_view text, const float4 & color)
+void draw_buffer_2d::draw_shadowed_text(int2 p, utf8::string_view text, const float4 & color)
 {
-    draw_text(buffer, p+1, text, {0,0,0,color.w});
-    draw_text(buffer, p, text, color);
+    draw_text(p+1, text, {0,0,0,color.w});
+    draw_text(p, text, color);
 }

@@ -17,26 +17,23 @@ struct node_type
 
     void draw(draw_buffer_2d & buffer, const rect & r) const
     {
-        const float4 title_color = {0.5f,0.5f,0.5f,1}, node_color = {0.3f,0.3f,0.3f,1};
-        draw_rounded_rect_top(buffer, {r.x0, r.y0, r.x1, r.y0+corner_radius}, title_color, title_color);
-        draw_rect(buffer, {r.x0, r.y0+corner_radius, r.x1, r.y0+title_height}, title_color, title_color);        
-        draw_rect(buffer, {r.x0, r.y0+title_height, r.x1, r.y1-corner_radius}, node_color, node_color);        
-        draw_rounded_rect_bottom(buffer, {r.x0, r.y1-corner_radius, r.x1, r.y1}, node_color, node_color);
-        draw_shadowed_text(buffer, {r.x0+8, r.y0+6}, caption, {1,1,1,1});
+        buffer.draw_partial_rounded_rect({r.x0, r.y0, r.x1, r.y0+title_height}, corner_radius, {0.5f,0.5f,0.5f,1}, true, true, false, false);
+        buffer.draw_partial_rounded_rect({r.x0, r.y0+title_height, r.x1, r.y1}, corner_radius, {0.3f,0.3f,0.3f,1}, false, false, true, true);
+        buffer.draw_shadowed_text({r.x0+8, r.y0+6}, caption, {1,1,1,1});
 
         for(size_t i=0; i<inputs.size(); ++i)
         {
             const auto loc = get_input_location(r,i);
-            draw_circle(buffer, loc, 8, {1,1,1,1});
-            draw_circle(buffer, loc, 6, {0.2f,0.2f,0.2f,1});
-            draw_shadowed_text(buffer, loc + int2(12, -buffer.library->default_font.line_height/2), inputs[i], {1,1,1,1});
+            buffer.draw_circle(loc, 8, {1,1,1,1});
+            buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
+            buffer.draw_shadowed_text(loc + int2(12, -buffer.library->default_font.line_height/2), inputs[i], {1,1,1,1});
         }
         for(size_t i=0; i<outputs.size(); ++i)
         {
             const auto loc = get_output_location(r,i);
-            draw_circle(buffer, loc, 8, {1,1,1,1});
-            draw_circle(buffer, loc, 6, {0.2f,0.2f,0.2f,1});
-            draw_shadowed_text(buffer, loc + int2(-12 - buffer.library->default_font.get_text_width(outputs[i]), -buffer.library->default_font.line_height/2), outputs[i], {1,1,1,1});
+            buffer.draw_circle(loc, 8, {1,1,1,1});
+            buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
+            buffer.draw_shadowed_text(loc + int2(-12 - buffer.library->default_font.get_text_width(outputs[i]), -buffer.library->default_font.line_height/2), outputs[i], {1,1,1,1});
         }
     }
 };
@@ -57,15 +54,17 @@ struct edge
     int output_index;
     const node * input_node;
     int input_index;
+    bool curved;
 
     void draw(draw_buffer_2d & buffer) const
     {
         const auto p0 = float2(output_node->get_output_location(output_index));
         const auto p3 = float2(input_node->get_input_location(input_index));
         const auto p1 = float2((p0.x+p3.x)/2, p0.y), p2 = float2((p0.x+p3.x)/2, p3.y);
-        draw_circle(buffer, output_node->get_output_location(output_index), 7, {1,1,1,1});
-        draw_circle(buffer, input_node->get_input_location(input_index), 7, {1,1,1,1});
-        draw_bezier_curve(buffer, p0, p1, p2, p3, 2, {1,1,1,1});
+        buffer.draw_circle(output_node->get_output_location(output_index), 7, {1,1,1,1});
+        buffer.draw_circle(input_node->get_input_location(input_index), 7, {1,1,1,1});
+        if(curved) buffer.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
+        else buffer.draw_line(p0, p3, 2, {1,1,1,1});
     }
 };
 
@@ -89,7 +88,8 @@ int main()
         {&type, {650,150,900,350}}
     };
     const edge edges[] = {
-        {&nodes[0], 1, &nodes[1], 0}
+        {&nodes[0], 0, &nodes[1], 0, false},
+        {&nodes[0], 2, &nodes[1], 1, true}
     };
 
     while(!glfwWindowShouldClose(win))

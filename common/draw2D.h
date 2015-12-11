@@ -31,22 +31,21 @@ struct draw_buffer_2d
     rect scissor;
 
     void begin_frame(const sprite_library & library, const int2 & window_size);
+    void end_frame();
 
-    void emit_polygon(const vertex * verts, size_t vert_count);
+    void draw_quad(const vertex & v0, const vertex & v1, const vertex & v2, const vertex & v3);
 
-    void emit_rect(int x0, int y0, int x1, int y1, float s0, float t0, float s1, float t1, const float4 & color);
+    void draw_line(const float2 & p0, const float2 & p1, int width, const float4 & color);
+    void draw_bezier_curve(const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color);
+
+    void draw_rect(const rect & r, const float4 & color);
+    void draw_partial_rounded_rect(rect r, int radius, const float4 & color, bool tl, bool tr, bool bl, bool br);
+    void draw_rounded_rect(const rect & r, int radius, const float4 & color);
+    void draw_circle(const int2 & center, int radius, const float4 & color);
+
+    void draw_sprite(const rect & r, float s0, float t0, float s1, float t1, const float4 & color);
+    void draw_text(int2 p, utf8::string_view text, const float4 & color);
+    void draw_shadowed_text(int2 p, utf8::string_view text, const float4 & color);
 };
-
-void draw_line(draw_buffer_2d & buffer, const float2 & p0, const float2 & p1, float width, const float4 & color);
-void draw_bezier_curve(draw_buffer_2d & buffer, const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color);
-void draw_rect(draw_buffer_2d & buffer, const rect & r, const float4 & top_color, const float4 & bottom_color);
-void draw_rect(draw_buffer_2d & buffer, const rect & r, const float4 & color);
-void draw_rounded_rect_top(draw_buffer_2d & buffer, const rect & r, const float4 & top_color, const float4 & bottom_color);
-void draw_rounded_rect_bottom(draw_buffer_2d & buffer, const rect & r, const float4 & top_color, const float4 & bottom_color);
-void draw_rounded_rect(draw_buffer_2d & buffer, const rect & r, int radius, const float4 & top_color, const float4 & bottom_color);
-void draw_rounded_rect(draw_buffer_2d & buffer, const rect & r, int radius, const float4 & color);
-void draw_circle(draw_buffer_2d & buffer, const int2 & center, int radius, const float4 & color);
-void draw_text(draw_buffer_2d & buffer, int2 p, utf8::string_view text, const float4 & color);
-void draw_shadowed_text(draw_buffer_2d & buffer, int2 p, utf8::string_view text, const float4 & color);
 
 #endif
