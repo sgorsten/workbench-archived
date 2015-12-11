@@ -13,6 +13,7 @@ struct sprite_library
     sprite_sheet sheet;
     font default_font;
     std::map<int, size_t> corner_sprites;
+    std::map<int, size_t> line_sprites;
 
     sprite_library() : default_font(&sheet)
     {
@@ -20,6 +21,15 @@ struct sprite_library
         for(int i=32; i<256; ++i) codepoints.push_back(i);
         default_font.load_glyphs("c:/windows/fonts/arialbd.ttf", 14, codepoints);
         for(int i=1; i<=32; ++i) corner_sprites[i] = sheet.insert_sprite(make_circle_quadrant(i));
+        for(int i=1; i<=8; ++i)
+        {
+            auto pixels = reinterpret_cast<uint8_t *>(std::malloc(i+2));
+            if(!pixels) throw std::bad_alloc();
+            sprite s = {std::shared_ptr<uint8_t>(pixels, std::free), {i+2,1}};
+            memset(pixels+1, 255, i);
+            pixels[0] = pixels[i+1] = 0;
+            line_sprites[i] = sheet.insert_sprite(s);
+        }
         sheet.prepare_texture();
     }
 };
@@ -76,35 +86,39 @@ void render_draw_buffer_opengl(const draw_buffer_2d & buffer, GLuint sprite_text
 
 void draw_line(draw_buffer_2d & buffer, const sprite_library & sprites, const float2 & p0, const float2 & p1, float width, const float4 & color)
 {
-    const auto & sprite = sprites.sheet.get_sprite(0);
-    const float2 perp = normalize(cross(float3(p1-p0,0), float3(0,0,1)).xy());
+    auto it = sprites.line_sprites.find(width);
+    if(it == end(sprites.line_sprites)) return;
+    const auto & sprite = sprites.sheet.get_sprite(it->second);
+    const float2 perp = normalize(cross(float3(p1-p0,0), float3(0,0,1)).xy()) * ((width+2) * 0.5f);
     const draw_buffer_2d::vertex verts[] = {
-        {p0+perp*(width/2), {sprite.s0,sprite.t0}, color},
-        {p1+perp*(width/2), {sprite.s1,sprite.t0}, color},
-        {p1-perp*(width/2), {sprite.s1,sprite.t1}, color},
-        {p0-perp*(width/2), {sprite.s0,sprite.t1}, color}
+        {p0+perp, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
+        {p1+perp, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+        {p1-perp, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+        {p0-perp, {sprite.s0, (sprite.t0+sprite.t1)/2}, color}
     };
     buffer.emit_polygon(verts, 4);
 }
 
-void draw_bezier_curve(draw_buffer_2d & buffer, const sprite_library & sprites, const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, float width, const float4 & color)
+void draw_bezier_curve(draw_buffer_2d & buffer, const sprite_library & sprites, const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color)
 {
-    const auto & sprite = sprites.sheet.get_sprite(0);
+    auto it = sprites.line_sprites.find(width);
+    if(it == end(sprites.line_sprites)) return;
+    const auto & sprite = sprites.sheet.get_sprite(it->second);
     const float2 d01 = p1-p0, d12 = p2-p1, d23 = p3-p2;
     float2 v0, v1;
     for(float i=0; i<=32; ++i)
     {
         float t = i/32, s = (1-t);
         const float2 p = p0*(s*s*s) + p1*(3*s*s*t) + p2*(3*s*t*t) + p3*(t*t*t);
-        const float2 d = normalize(d01*(3*s*s) + d12*(6*s*t) + d23*(3*t*t)) * (width/2);
+        const float2 d = normalize(d01*(3*s*s) + d12*(6*s*t) + d23*(3*t*t)) * ((width+2) * 0.5f);
         const float2 v2 = {p.x-d.y, p.y+d.x}, v3 = {p.x+d.y, p.y-d.x};
         if(i)
         {
             const draw_buffer_2d::vertex verts[] = {
-                {v0, {sprite.s0,sprite.t0}, color},
-                {v1, {sprite.s1,sprite.t0}, color},
-                {v2, {sprite.s1,sprite.t1}, color},
-                {v3, {sprite.s0,sprite.t1}, color}
+                {v0, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
+                {v1, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+                {v2, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+                {v3, {sprite.s0, (sprite.t0+sprite.t1)/2}, color}
             };
             buffer.emit_polygon(verts, 4);
         }
@@ -116,7 +130,8 @@ void draw_bezier_curve(draw_buffer_2d & buffer, const sprite_library & sprites, 
 void draw_rect(draw_buffer_2d & buffer, const sprite_library & sprites, const rect & r, const float4 & top_color, const float4 & bottom_color)
 {
     const auto & sprite = sprites.sheet.get_sprite(0);
-    buffer.emit_rect(r.x0, r.y0, r.x1, r.y1, sprite.s0, sprite.t0, sprite.s1, sprite.t1, top_color); //, bottom_color);
+    float s = (sprite.s0+sprite.s1)/2, t = (sprite.t0+sprite.t1)/2;
+    buffer.emit_rect(r.x0, r.y0, r.x1, r.y1, s, t, s, t, top_color); //, bottom_color);
 }
 void draw_rect(draw_buffer_2d & buffer, const sprite_library & sprites, const rect & r, const float4 & color) { draw_rect(buffer, sprites, r, color, color); }
 
@@ -250,7 +265,7 @@ struct edge
         const auto p1 = float2((p0.x+p3.x)/2, p0.y), p2 = float2((p0.x+p3.x)/2, p3.y);
         draw_circle(buffer, sprites, output_node->get_output_location(output_index), 7, {1,1,1,1});
         draw_circle(buffer, sprites, input_node->get_input_location(input_index), 7, {1,1,1,1});
-        draw_bezier_curve(buffer, sprites, p0, p1, p2, p3, 3, {1,1,1,1});
+        draw_bezier_curve(buffer, sprites, p0, p1, p2, p3, 2, {1,1,1,1});
     }
 };
 
@@ -302,8 +317,8 @@ GLuint make_sprite_texture_opengl(const sprite_sheet & sprites)
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, sprites.get_texture_dims().x, sprites.get_texture_dims().y, 0, GL_ALPHA, GL_UNSIGNED_BYTE, sprites.get_texture_data());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
     return tex;
 }
