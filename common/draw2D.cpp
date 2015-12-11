@@ -25,12 +25,42 @@ void draw_buffer_2d::begin_frame(const sprite_library & library, const int2 & wi
     vertices.clear();
     indices.clear();
     lists.clear();
+    scissor = {0, 0, window_size.x, window_size.y};
     sx = 2.0f / window_size.x;
     sy = 2.0f / window_size.y;
 }
 
+static size_t clip_polygon(draw_buffer_2d::vertex (& out)[8], const draw_buffer_2d::vertex in[], size_t in_size, const float3 & plane)
+{
+    size_t out_size = 0;
+    for(size_t i=0; i<in_size; ++i)
+    {
+        const auto & v0 = in[i], & v1 = in[(i+1)%in_size];
+        float t0 = dot(float3(v0.position,1), plane);
+        if(t0 >= 0)
+        {
+            assert(out_size < 8);
+            out[out_size++] = v0;
+        }
+        float t1 = dot(float3(v1.position,1), plane);
+        if(t0 * t1 < 0)
+        {
+            assert(out_size < 8);
+            const float t = -t0/(t1-t0);
+            out[out_size++] = {lerp(v0.position, v1.position, t), lerp(v0.texcoord, v1.texcoord, t), lerp(v0.color, v1.color, t)};
+        }
+    }
+    return out_size;
+}
+
 void draw_buffer_2d::emit_polygon(const vertex * verts, size_t vert_count)
 {
+    assert(vert_count <= 4);
+    vertex verts_a[8], verts_b[8];
+    vert_count = clip_polygon(verts_a, verts,   vert_count, float3(+1,  0, -scissor.x0));
+    vert_count = clip_polygon(verts_b, verts_a, vert_count, float3( 0, +1, -scissor.y0));
+    vert_count = clip_polygon(verts_a, verts_b, vert_count, float3(-1,  0, +scissor.x1));
+    vert_count = clip_polygon(verts_b, verts_a, vert_count, float3( 0, -1, +scissor.y1));
     if(vertices.size() + vert_count > 0x10000) throw std::runtime_error("draw buffer overflow");
     const uint16_t base = vertices.size();
     for(uint16_t i=2; i<vert_count; ++i)
@@ -39,9 +69,9 @@ void draw_buffer_2d::emit_polygon(const vertex * verts, size_t vert_count)
         indices.push_back(base+i-1);
         indices.push_back(base+i);
     }
-    for(auto end = verts + vert_count; verts != end; ++verts)
+    for(auto it = verts_b, end = verts_b + vert_count; it != end; ++it)
     {
-        vertices.push_back({{verts->position.x*sx-1, 1-verts->position.y*sy}, verts->texcoord, verts->color});
+        vertices.push_back({{it->position.x*sx-1, 1-it->position.y*sy}, it->texcoord, it->color});
     }
 }
 

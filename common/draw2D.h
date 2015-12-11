@@ -28,6 +28,7 @@ struct draw_buffer_2d
     std::vector<uint16_t> indices;
     std::vector<list> lists;
     float sx,sy;
+    rect scissor;
 
     void begin_frame(const sprite_library & library, const int2 & window_size);
 
