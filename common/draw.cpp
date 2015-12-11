@@ -195,7 +195,7 @@ struct gfx::mesh
     std::shared_ptr<gfx::context> ctx;
     attribute attributes[8];
     GLsizei vertex_stride;
-    GLenum primitive_mode;
+    GLenum primitive_mode, index_type;
     GLsizei element_count;
     GLuint vbo, ibo;
 };
@@ -220,14 +220,27 @@ void gfx::set_attribute(mesh & m, int index, GLint size, GLenum type, GLboolean 
     m.vertex_stride = stride; // TODO: Ensure consistency
 }
 
-void gfx::set_indices(mesh & m, GLenum mode, const unsigned int * data, size_t count)
+void gfx::set_indices(mesh & m, GLenum mode, const uint16_t * data, size_t count)
 {
     glfwMakeContextCurrent(m.ctx->hidden);
     if(!m.ibo) glGenBuffers(1, &m.ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * count, data, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint16_t) * count, data, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     m.primitive_mode = mode;
+    m.index_type = GL_UNSIGNED_SHORT;
+    m.element_count = count;
+}
+
+void gfx::set_indices(mesh & m, GLenum mode, const uint32_t * data, size_t count)
+{
+    glfwMakeContextCurrent(m.ctx->hidden);
+    if(!m.ibo) glGenBuffers(1, &m.ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t) * count, data, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    m.primitive_mode = mode;
+    m.index_type = GL_UNSIGNED_INT;
     m.element_count = count;
 }
 
@@ -384,7 +397,7 @@ void renderer::draw_scene(GLFWwindow * window, const rect & r, const uniform_blo
             glBindTexture(current_program->desc.samplers[i].sampler_type->target, tex ? tex->object_name : 0);
         }
 
-        glDrawElements(current_mesh->primitive_mode, current_mesh->element_count, GL_UNSIGNED_INT, 0);
+        glDrawElements(current_mesh->primitive_mode, current_mesh->element_count, current_mesh->index_type, 0);
     }
 
     // Reset all state

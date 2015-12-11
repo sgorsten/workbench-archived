@@ -134,18 +134,16 @@ struct gui_resources
     
     void render_gui(const gui & g)
     {
-        std::vector<unsigned> indices;
-        for(const auto & list : g.lists) for(int i=list.first; i<list.last; ++i) indices.push_back(i);
-        gfx::set_indices(*mesh, GL_QUADS, indices.data(), indices.size());
-        gfx::set_vertices(*mesh, g.vertices.data(), g.vertices.size() * sizeof(gui::vertex));
-        gfx::set_attribute(*mesh, 0, &gui::vertex::position);
-        gfx::set_attribute(*mesh, 1, &gui::vertex::texcoord);
-        gfx::set_attribute(*mesh, 2, &gui::vertex::color);
+        gfx::set_indices(*mesh, GL_TRIANGLES, g.buffer.get_indices().data(), g.buffer.get_indices().size());
+        gfx::set_vertices(*mesh, g.buffer.get_vertices().data(), g.buffer.get_vertices().size() * sizeof(draw_buffer_2d::vertex));
+        gfx::set_attribute(*mesh, 0, &draw_buffer_2d::vertex::position);
+        gfx::set_attribute(*mesh, 1, &draw_buffer_2d::vertex::texcoord);
+        gfx::set_attribute(*mesh, 2, &draw_buffer_2d::vertex::color);
 
         list = {};
         list.begin_object(mesh, program);
-        list.set_uniform("u_scale", float2(2.0f/g.window_size.x, -2.0f/g.window_size.y));
-        list.set_uniform("u_offset", float2(-1, +1));
+        list.set_uniform("u_scale", float2(1,1)); //2.0f/g.window_size.x, -2.0f/g.window_size.y));
+        list.set_uniform("u_offset", float2(0,0)); //-1, +1));
         list.set_sampler("u_texture", tex);
     }
 };
@@ -173,7 +171,7 @@ struct point_light : public scene_object
     {
         int y0 = r.y0 + 4 - offset;
 
-        const int line_height = g.default_font.line_height + 4, mid = (r.x0 + r.x1) / 2;
+        const int line_height = g.sprites.default_font.line_height + 4, mid = (r.x0 + r.x1) / 2;
         draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Name");
         edit(g, 1, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
         y0 += line_height + 4;
@@ -213,7 +211,7 @@ struct static_mesh : public scene_object
         int y0 = r.y0 + 4 - offset;
 
         int id = 0;
-        const int line_height = g.default_font.line_height + 4, mid = (r.x0 + r.x1) / 2;
+        const int line_height = g.sprites.default_font.line_height + 4, mid = (r.x0 + r.x1) / 2;
         draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Name");
         edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
         y0 += line_height + 4;
@@ -265,7 +263,7 @@ void object_list_ui(gui & g, int id, rect r, const std::vector<scene_object *> &
     int y0 = panel.y0 + 4 - offset;
     for(auto * obj : objects)
     {
-        const rect list_entry = {panel.x0 + 4, y0, panel.x1 - 4, y0 + g.default_font.line_height};
+        const rect list_entry = {panel.x0 + 4, y0, panel.x1 - 4, y0 + g.sprites.default_font.line_height};
         if(g.check_click(&obj - objects.data(), list_entry))
         {
             if(!g.is_control_held()) selection.clear();
@@ -277,7 +275,7 @@ void object_list_ui(gui & g, int id, rect r, const std::vector<scene_object *> &
 
         bool selected = selection.find(obj) != end(selection);
         draw_shadowed_text(g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj->name);
-        y0 += g.default_font.line_height + 4;
+        y0 += g.sprites.default_font.line_height + 4;
     }
     g.end_scissor();
     g.end_children();
@@ -363,16 +361,14 @@ std::shared_ptr<gfx::mesh> make_draw_mesh(std::shared_ptr<gfx::context> ctx, con
 
 int main(int argc, char * argv[]) try
 {
-    sprite_sheet sprites;
+    sprite_library sprites;
 
     gui g(sprites);
     g.cam.yfov = 1.0f;
     g.cam.near_clip = 0.1f;
     g.cam.far_clip = 16.0f;
     g.cam.position = {0,1.5f,4};
-
-    sprites.prepare_texture();
-   
+       
     auto ctx = gfx::create_context();
     auto vert_shader = compile_shader(ctx, GL_VERTEX_SHADER, vert_shader_source);
     auto frag_shader = compile_shader(ctx, GL_FRAGMENT_SHADER, frag_shader_source);
@@ -408,7 +404,7 @@ int main(int argc, char * argv[]) try
     std::set<scene_object *> selection;
     
     gui_resources gui_res;
-    gui_res.init_resources(ctx, sprites);
+    gui_res.init_resources(ctx, sprites.sheet);
 
     g.gizmo_res.program = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
     for(int i=0; i<9; ++i) g.gizmo_res.meshes[i] = make_draw_mesh(ctx, g.gizmo_res.geomeshes[i]);

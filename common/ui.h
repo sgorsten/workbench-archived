@@ -6,6 +6,7 @@
 
 #include "geometry.h"
 #include "font.h"
+#include "draw2D.h"
 #include "draw.h"
 #include "input.h"
 
@@ -47,19 +48,9 @@ enum class clipboard_event { none, cut, copy, paste };
 
 struct gui
 {
-    struct vertex { short2 position; byte4 color; float2 texcoord; };    
-    struct list { size_t level,first,last; };
-
+    const sprite_library & sprites;
+    draw_buffer_2d buffer;
     gizmo_resources gizmo_res;
-
-    sprite_sheet & sprites;
-    std::map<int, size_t> corner_sprites;
-
-    std::vector<vertex> vertices;
-    std::vector<list> lists;
-    std::vector<rect> scissor;
-
-    font default_font;
 
     int2 window_size;               // Size in pixels of the current window
     bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
@@ -86,7 +77,7 @@ struct gui
 
     std::vector<menu_stack_frame> menu_stack;
 
-    gui(sprite_sheet & sprites);
+    gui(sprite_library & sprites);
 
     bool is_control_held() const { return (in.mods & GLFW_MOD_CONTROL) != 0; }
     bool is_shift_held() const { return (in.mods & GLFW_MOD_SHIFT) != 0; }
@@ -112,7 +103,6 @@ struct gui
     void end_overlay();
     void begin_scissor(const rect & r);
     void end_scissor();
-    void add_glyph(const rect & r, float s0, float t0, float s1, float t1, const float4 & top_color, const float4 & bottom_color);
 
     // API for doing computations in 3D space
     float4x4 get_view_matrix() const { return cam.get_view_matrix(); }

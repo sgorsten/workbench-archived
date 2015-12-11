@@ -26,6 +26,7 @@ public:
     const sprite_library & get_library() const { return *library; }
     const std::vector<vertex> & get_vertices() const { return vertices; }
     const std::vector<uint16_t> & get_indices() const { return out_indices; }
+    const rect & get_scissor_rect() const { return scissor.back(); }
 
     void begin_frame(const sprite_library & library, const int2 & window_size);
     void end_frame();

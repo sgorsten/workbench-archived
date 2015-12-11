@@ -30,15 +30,12 @@ bool widget_id::is_parent_of(const widget_id & r, int id) const
     return values[r.values.size()] == id;
 }
 
-gui::gui(sprite_sheet & sprites) : sprites(sprites), default_font(&sprites), bf(), bl(), bb(), br(), ml(), mr(), in({}), timestep(), cam({}), gizmode() 
+gui::gui(sprite_library & sprites) : sprites(sprites), bf(), bl(), bb(), br(), ml(), mr(), in({}), timestep(), cam({}), gizmode() 
 {
     std::vector<int> codepoints;
-    for(int i=0; i<128; ++i) if(isprint(i)) codepoints.push_back(i);
-    default_font.load_glyphs("c:/windows/fonts/arialbd.ttf", 14, codepoints);
-    codepoints.clear();
     for(int i=0xf000; i<=0xf295; ++i) codepoints.push_back(i);
-    default_font.load_glyphs("fontawesome-webfont.ttf", 14, codepoints);
-    for(int i=1; i<=32; ++i) corner_sprites[i] = sprites.insert_sprite(make_circle_quadrant(i));
+    sprites.default_font.load_glyphs("fontawesome-webfont.ttf", 14, codepoints);
+    sprites.sheet.prepare_texture();
 
     std::initializer_list<float2> arrow_points = {{0, 0.05f}, {1, 0.05f}, {1, 0.10f}, {1.2f, 0}};
     std::initializer_list<float2> ring_points = {{+0.05f, 1}, {-0.05f, 1}, {-0.05f, 1}, {-0.05f, 1.2f}, {-0.05f, 1.2f}, {+0.05f, 1.2f}, {+0.05f, 1.2f}, {+0.05f, 1}};
@@ -55,7 +52,7 @@ gui::gui(sprite_sheet & sprites) : sprites(sprites), default_font(&sprites), bf(
 
 bool gui::is_cursor_over(const rect & r) const
 {
-    const auto & s = scissor.back();
+    const auto & s = buffer.get_scissor_rect();
     return in.cursor.x >= r.x0 && in.cursor.y >= r.y0 && in.cursor.x < r.x1 && in.cursor.y < r.y1
         && in.cursor.x >= s.x0 && in.cursor.y >= s.y0 && in.cursor.x < s.x1 && in.cursor.y < s.y1;
 }
@@ -95,158 +92,47 @@ bool gui::check_release(int id)
 void gui::begin_frame(const int2 & window_size)
 {
     this->window_size = window_size;
-    vertices.clear();
-    lists = {{0, 0}};
-    scissor.push_back({0, 0, window_size.x, window_size.y});
+    buffer.begin_frame(sprites, window_size);
     draw = {};
     clip_event = clipboard_event::none;
     clipboard.clear();
 }
-
-void gui::end_frame()
-{
-    lists.back().last = vertices.size();
-    std::stable_sort(begin(lists), end(lists), [](const list & a, const list & b) { return a.level < b.level; });
-}
-
-void gui::begin_overlay()
-{
-    lists.back().last = vertices.size();
-    lists.push_back({lists.back().level + 1, vertices.size()});
-    scissor.push_back(scissor.front()); // Overlays are not constrained by parent scissor rect
-}
-
-void gui::end_overlay()
-{
-    scissor.pop_back();
-    lists.back().last = vertices.size();
-    lists.push_back({lists.back().level - 1, vertices.size()});
-}
-
-void gui::begin_scissor(const rect & r)
-{
-    const auto & s = scissor.back();
-    scissor.push_back({std::max(s.x0, r.x0), std::max(s.y0, r.y0), std::min(s.x1, r.x1), std::min(s.y1, r.y1)});
-}
-
-void gui::end_scissor()
-{
-    scissor.pop_back();
-}
-
-float lerp(float a, float b, float t) { return a*(1-t) + b*t; }
-
-void gui::add_glyph(const rect & r_, float s0, float t0, float s1, float t1, const float4 & top_color, const float4 & bottom_color)
-{
-    // Discard fully clipped glyphs
-    const auto & s = scissor.back();
-    if(r_.x0 >= s.x1) return;
-    if(r_.x1 <= s.x0) return;
-    if(r_.y0 >= s.y1) return;
-    if(r_.y1 <= s.y0) return;
-
-    auto r = r_;
-    auto c0 = top_color, c1 = bottom_color;
-        
-    // Clip glyph against left edge of scissor rect
-    if(r.x0 < s.x0)
-    {
-        float f = (float)(s.x0 - r.x0) / r.width();
-        r.x0 = s.x0;
-        s0 = lerp(s0, s1, f);
-    }
-
-    // Clip glyph against top edge of scissor rect
-    if(r.y0 < s.y0)
-    {
-        float f = (float)(s.y0 - r.y0) / r.height();
-        r.y0 = s.y0;
-        t0 = lerp(t0, t1, f);
-        c0 = lerp(c0, c1, f);            
-    }
-
-    // Clip glyph against right edge of scissor rect
-    if(r.x1 > s.x1)
-    {
-        float f = (float)(r.x1 - s.x1) / r.width();
-        r.x1 = s.x1;
-        s1 = lerp(s1, s0, f);
-    }
-
-    // Clip glyph against bottom edge of scissor rect
-    if(r.y1 > s.y1)
-    {
-        float f = (float)(r.y1 - s.y1) / r.height();
-        r.y1 = s.y1;
-        t1 = lerp(t1, t0, f);
-        c1 = lerp(c1, c0, f);            
-    }
-
-    // Add clipped glyph
-    vertices.push_back({short2(r.x0, r.y0), byte4(c0 * 255.0f), {s0, t0}});
-    vertices.push_back({short2(r.x0, r.y1), byte4(c1 * 255.0f), {s0, t1}});
-    vertices.push_back({short2(r.x1, r.y1), byte4(c1 * 255.0f), {s1, t1}});
-    vertices.push_back({short2(r.x1, r.y0), byte4(c0 * 255.0f), {s1, t0}});
-}
+void gui::end_frame() { buffer.end_frame(); }
+void gui::begin_overlay() { buffer.begin_overlay(); }
+void gui::end_overlay() { buffer.end_overlay(); }
+void gui::begin_scissor(const rect & r) { buffer.begin_scissor(r); }
+void gui::end_scissor() { buffer.end_scissor(); }
 
 void draw_rect(gui & g, const rect & r, const float4 & color) { draw_rect(g, r, color, color); }
 void draw_rect(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
 {
-    auto & sprite = g.sprites.get_sprite(0);
-    g.add_glyph(r, sprite.s0, sprite.t0, sprite.s1, sprite.t1, top_color, bottom_color);
+    g.buffer.draw_rect(r, top_color);
 }
 
 void draw_rounded_rect_top(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
 {
-    const int radius = r.height();
-    draw_rect(g, {r.x0+radius, r.y0, r.x1-radius, r.y0+radius}, top_color, bottom_color);
-    auto it = g.corner_sprites.find(radius);
-    if(it == end(g.corner_sprites)) return;
-    auto & sprite = g.sprites.get_sprite(it->second);
-    g.add_glyph({r.x0, r.y0, r.x0+radius, r.y0+radius}, sprite.s1, sprite.t1, sprite.s0, sprite.t0, top_color, bottom_color);
-    g.add_glyph({r.x1-radius, r.y0, r.x1, r.y0+radius}, sprite.s0, sprite.t1, sprite.s1, sprite.t0, top_color, bottom_color);
+    g.buffer.draw_partial_rounded_rect(r, r.height(), top_color, 1, 1, 0, 0);
 }
 
 void draw_rounded_rect_bottom(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
 {
-    const int radius = r.height();
-    draw_rect(g, {r.x0+radius, r.y1-radius, r.x1-radius, r.y1}, top_color, bottom_color);
-    auto it = g.corner_sprites.find(radius);
-    if(it == end(g.corner_sprites)) return;
-    auto & sprite = g.sprites.get_sprite(it->second);
-    g.add_glyph({r.x0, r.y1-radius, r.x0+radius, r.y1}, sprite.s1, sprite.t0, sprite.s0, sprite.t1, top_color, bottom_color);
-    g.add_glyph({r.x1-radius, r.y1-radius, r.x1, r.y1}, sprite.s0, sprite.t0, sprite.s1, sprite.t1, top_color, bottom_color);
+    g.buffer.draw_partial_rounded_rect(r, r.height(), top_color, 0, 0, 1, 1);
 }
 
 void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color) { draw_rounded_rect(g, r, radius, color, color); }
 void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & top_color, const float4 & bottom_color)
 {
-    assert(radius >= 0);
-    const float4 c1 = lerp(top_color, bottom_color, (float)radius/r.height());
-    const float4 c2 = lerp(bottom_color, top_color, (float)radius/r.height());
-    draw_rounded_rect_top(g, {r.x0, r.y0, r.x1, r.y0+radius}, top_color, c1);
-    draw_rect(g, {r.x0, r.y0+radius, r.x1, r.y1-radius}, c1, c2);        
-    draw_rounded_rect_bottom(g, {r.x0, r.y1-radius, r.x1, r.y1}, c2, bottom_color);
+    g.buffer.draw_rounded_rect(r, radius, top_color);
 }
 
 void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
-{         
-    for(const char * it = text.data(), * end = it + text.size(); it != end; it = utf8::next(it))
-    {
-        if(auto * glyph = g.default_font.get_glyph(utf8::code(it)))
-        {
-            auto & s = g.sprites.get_sprite(glyph->sprite_index);
-            const int2 p0 = p + glyph->offset, p1 = p0 + s.dims;
-            g.add_glyph({p0.x, p0.y, p1.x, p1.y}, s.s0, s.t0, s.s1, s.t1, c, c);
-            p.x += glyph->advance;
-        }
-    }
+{     
+    g.buffer.draw_text(p, text, c);
 }
 
 void draw_shadowed_text(gui & g, int2 p, const float4 & c, const std::string & text)
 {
-    draw_text(g, p+1, {0,0,0,c.w}, text);
-    draw_text(g, p, c, text);
+    g.buffer.draw_shadowed_text(p, text, c);
 }
 
 static void prev_char(const std::string & text, std::string::size_type & pos) { pos = utf8::prev(text.data() + pos) - text.data(); }
@@ -257,11 +143,11 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
     if(g.is_cursor_over(r)) g.icon = cursor_icon::ibeam;
     if(g.check_click(id, r))
     {
-        g.text_cursor = g.text_mark = g.default_font.get_cursor_pos(text, g.click_offset.x - 5);
+        g.text_cursor = g.text_mark = g.sprites.default_font.get_cursor_pos(text, g.click_offset.x - 5);
         g.focused_id = g.pressed_id;
     }
     g.check_release(id);
-    if(g.is_pressed(id)) g.text_cursor = g.default_font.get_cursor_pos(text, g.in.cursor.x - r.x0 - 5);
+    if(g.is_pressed(id)) g.text_cursor = g.sprites.default_font.get_cursor_pos(text, g.in.cursor.x - r.x0 - 5);
 
     bool changed = false;
     if(g.is_focused(id))
@@ -380,12 +266,12 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
     if(g.is_focused(id))
     {
         auto lo = std::min(g.text_cursor, g.text_mark), hi = std::max(g.text_cursor, g.text_mark);
-        draw_rect(g, {tr.x0 + g.default_font.get_text_width(text.substr(0, lo)), tr.y0, tr.x0 + g.default_font.get_text_width(text.substr(0, hi)), tr.y1}, {1,1,0,1}, {1,1,0,1});
+        draw_rect(g, {tr.x0 + g.sprites.default_font.get_text_width(text.substr(0, lo)), tr.y0, tr.x0 + g.sprites.default_font.get_text_width(text.substr(0, hi)), tr.y1}, {1,1,0,1}, {1,1,0,1});
     }
     draw_text(g, {tr.x0, tr.y0}, {0,0,0,1}, text);
     if(g.is_focused(id))
     {
-        int w = g.default_font.get_text_width(text.substr(0, g.text_cursor));
+        int w = g.sprites.default_font.get_text_width(text.substr(0, g.text_cursor));
         draw_rect(g, {tr.x0+w, tr.y0, tr.x0+w+1, tr.y1}, {0,0,0,1});
     }
     return changed;
@@ -425,7 +311,7 @@ const int splitbar_width = 6;
 
 rect tabbed_frame(gui & g, rect r, const std::string & caption)
 {
-    const int cap_width = g.default_font.get_text_width(caption)+24, cap_height = g.default_font.line_height + 4;
+    const int cap_width = g.sprites.default_font.get_text_width(caption)+24, cap_height = g.sprites.default_font.line_height + 4;
 
     draw_rounded_rect_top(g, {r.x0, r.y0, r.x0 + cap_width, r.y0 + 10}, frame_color, frame_color);
     draw_rect(g, {r.x0, r.y0 + 10, r.x0 + cap_width, r.y0 + cap_height}, frame_color);
@@ -500,13 +386,13 @@ static rect get_next_menu_item_rect(gui & g, rect & r, const std::string & capti
 {
     if(g.menu_stack.size() == 1)
     {
-        const rect item = {r.x1, r.y0 + (r.height() - g.default_font.line_height) / 2, r.x1 + g.default_font.get_text_width(caption), r.y0 + (r.height() + g.default_font.line_height) / 2};
+        const rect item = {r.x1, r.y0 + (r.height() - g.sprites.default_font.line_height) / 2, r.x1 + g.sprites.default_font.get_text_width(caption), r.y0 + (r.height() + g.sprites.default_font.line_height) / 2};
         r.x1 = item.x1 + 30;
         return item;
     }
     else
     {
-        const rect item = {r.x0 + 4, r.y1, r.x0 + 190, r.y1 + g.default_font.line_height};
+        const rect item = {r.x0 + 4, r.y1, r.x0 + 190, r.y1 + g.sprites.default_font.line_height};
         r.x1 = std::max(r.x1, item.x1);
         r.y1 = item.y1 + 4;
         return item;    

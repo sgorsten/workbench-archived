@@ -90,7 +90,8 @@ namespace gfx
     std::shared_ptr<mesh>       create_mesh         (std::shared_ptr<context> ctx);
     void                        set_vertices        (mesh & m, const void * data, size_t size);
     void                        set_attribute       (mesh & m, int index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid * pointer);
-    void                        set_indices         (mesh & m, GLenum mode, const unsigned int * data, size_t count);
+    void                        set_indices         (mesh & m, GLenum mode, const uint16_t * data, size_t count);
+    void                        set_indices         (mesh & m, GLenum mode, const uint32_t * data, size_t count);
 
     GLFWwindow *                create_window       (context & ctx,  const int2 & dims, const char * title, GLFWmonitor * monitor = nullptr);
 
