@@ -307,10 +307,9 @@ void viewport_ui(gui & g, int id, rect r, std::vector<scene_object *> & objects,
     {
         g.begin_children(id);
         auto * obj = *selection.begin();
-        orientation_gizmo(g, 1, obj->p.position, obj->p.orientation);
-        //float3 com = get_center_of_mass(selection), new_com = com;
-        //position_gizmo(g, 1, new_com);
-        //if(new_com != com) for(auto obj : selection) obj->p.position += new_com - com;
+        float3 com = get_center_of_mass(selection), new_com = com;
+        position_gizmo(g, 1, new_com);
+        if(new_com != com) for(auto obj : selection) obj->p.position += new_com - com;
         g.end_children();
     }
     if(g.is_child_pressed(id)) return;

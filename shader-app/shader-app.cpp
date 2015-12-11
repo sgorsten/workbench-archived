@@ -4,6 +4,7 @@
 #include "draw.h"
 #include "input.h"
 #include "ui.h"
+#include "load.h"
 
 #include <cassert>
 
@@ -207,6 +208,9 @@ int main(int argc, char * argv[]) try
             list.set_sampler("u_normalTex", normal_tex);
         }
 
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
         the_renderer.draw_scene(win, {0, 0, w, h}, per_scene, scene_buffer.data(), list);
         glfwSwapBuffers(win);
     }
