@@ -60,10 +60,10 @@ void sprite_sheet::prepare_texture()
             {
                 memcpy(tex_pixels.data() + (used.y+y)*tex_dims.x + used.x, g->pixels.get() + y*g->dims.x, g->dims.x);
             }
-            g->s0 = static_cast<float>(used.x) / tex_dims.x;
-            g->t0 = static_cast<float>(used.y) / tex_dims.y;
-            g->s1 = static_cast<float>(used.x + g->dims.x) / tex_dims.x;
-            g->t1 = static_cast<float>(used.y + g->dims.y) / tex_dims.y;
+            g->s0 = static_cast<float>(used.x + g->border) / tex_dims.x;
+            g->t0 = static_cast<float>(used.y + g->border) / tex_dims.y;
+            g->s1 = static_cast<float>(used.x + g->dims.x - g->border) / tex_dims.x;
+            g->t1 = static_cast<float>(used.y + g->dims.y - g->border) / tex_dims.y;
             used.x += g->dims.x + border;
             next_line = std::max(next_line, used.y + g->dims.y);
         }
@@ -117,18 +117,26 @@ static void compute_circle_quadrant_coverage(float coverage[], int radius)
 
 sprite make_circle_quadrant(int radius)
 {
-    sprite s;
     std::vector<float> coverage(radius*radius);
     compute_circle_quadrant_coverage(coverage.data(), radius);
 
-    auto memory = reinterpret_cast<uint8_t *>(std::malloc(radius*radius));
+    const int width = radius+2;
+    auto memory = reinterpret_cast<uint8_t *>(std::malloc(width*width));
     if(!memory) throw std::bad_alloc();
     std::shared_ptr<uint8_t> pixels(memory, std::free);
-    for(int i=0; i<radius*radius; ++i) pixels.get()[i] = static_cast<uint8_t>(coverage[i] * 255);
+    auto out = pixels.get(); auto in = coverage.data();
+    *out++ = 255;
+    for(int i=0; i<radius; ++i) *out++ = 255;
+    *out++ = 0;
+    for(int i=0; i<radius; ++i)
+    {
+        *out++ = 255;
+        for(int i=0; i<radius; ++i) *out++ = static_cast<uint8_t>(*in++ * 255);
+        *out++ = 0;
+    }
+    for(int i=0; i<width; ++i) *out++ = 0;
 
-    s.pixels = pixels;
-    s.dims = {radius, radius};
-    return s;
+    return {pixels, {width,width}, true};
 }
 
 namespace utf8
@@ -250,7 +258,7 @@ void font::load_glyphs(const std::string & path, int size, const std::vector<int
     {
         glyph_data & g = glyphs[codepoint];
 
-        sprite s;
+        sprite s = {};
         s.pixels = std::shared_ptr<uint8_t>(stbtt_GetCodepointBitmap(&info, 0, scale, codepoint, &s.dims.x, &s.dims.y, &g.offset.x, &g.offset.y), [](uint8_t * p) { stbtt_FreeBitmap(p, 0); });
         g.sprite_index = sprites->insert_sprite(s);
 
@@ -374,16 +382,15 @@ void draw_buffer_2d::draw_quad(const vertex & v0, const vertex & v1, const verte
 
 void draw_buffer_2d::draw_sprite(const rect & r, float s0, float t0, float s1, float t1, const float4 & color)
 {
-    // Sprites are ALWAYS pixel-aligned. This helps avoid sprite bleeding due to texture filtering.
-    draw_quad({round(transform_point(float2(r.x0, r.y0))), {s0,t0}, color},
-              {round(transform_point(float2(r.x1, r.y0))), {s1,t0}, color},
-              {round(transform_point(float2(r.x1, r.y1))), {s1,t1}, color},
-              {round(transform_point(float2(r.x0, r.y1))), {s0,t1}, color});
+    draw_quad({transform_point(float2(r.x0, r.y0)), {s0,t0}, color},
+              {transform_point(float2(r.x1, r.y0)), {s1,t0}, color},
+              {transform_point(float2(r.x1, r.y1)), {s1,t1}, color},
+              {transform_point(float2(r.x0, r.y1)), {s0,t1}, color});
 }
 
 void draw_buffer_2d::draw_line(const float2 & p0, const float2 & p1, int width, const float4 & color)
 {
-    int adjusted_width = std::max(static_cast<int>(std::round(transform_length(width))), 1);
+    int adjusted_width = std::min(std::max(static_cast<int>(std::round(transform_length(width))), 1), 8);
     auto it = library->line_sprites.find(adjusted_width);
     if(it == end(library->line_sprites)) return;
     const auto & sprite = library->sheet.get_sprite(it->second);
@@ -396,7 +403,7 @@ void draw_buffer_2d::draw_line(const float2 & p0, const float2 & p1, int width, 
 
 void draw_buffer_2d::draw_bezier_curve(const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color)
 {
-    int adjusted_width = std::max(static_cast<int>(std::round(transform_length(width))), 1);
+    int adjusted_width = std::min(std::max(static_cast<int>(std::round(transform_length(width))), 1), 8);
     auto it = library->line_sprites.find(adjusted_width);
     if(it == end(library->line_sprites)) return;
     const auto & sprite = library->sheet.get_sprite(it->second);
@@ -430,7 +437,7 @@ static rect take_y0(rect & r, int y) { rect r2 = {r.x0, r.y0, r.x1, r.y0+y}; r.y
 static rect take_y1(rect & r, int y) { rect r2 = {r.x0, r.y1-y, r.x1, r.y1}; r.y1 = r2.y0; return r2; }
 void draw_buffer_2d::draw_partial_rounded_rect(rect r, int radius, const float4 & color, bool tl, bool tr, bool bl, bool br)
 {
-    int adjusted_radius = std::max(static_cast<int>(std::ceilf(radius * transforms.back().scale)), 1);
+    int adjusted_radius = std::min(std::max(static_cast<int>(std::ceilf(radius * transforms.back().scale)), 1), 32);
     auto it = library->corner_sprites.find(adjusted_radius);
     if(it == end(library->corner_sprites)) return;
     auto & sprite = library->sheet.get_sprite(it->second);

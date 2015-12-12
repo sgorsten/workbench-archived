@@ -115,12 +115,8 @@ int main()
         for(const auto & e : events) switch(e.type)
         {
         case input::scroll:
-            if(e.scroll.y != 0)
-            {
-                const float factor = e.scroll.y > 0 ? 1.25f : 0.8f;
-                const float scale = std::min(cam.scale * factor, 1.0f) / cam.scale;
-                cam = transform_2d::scaling(scale, e.cursor) * cam;
-            }
+            if(e.scroll.y > 0) cam = transform_2d::scaling(1.25f, e.cursor) * cam;
+            if(e.scroll.y < 0) cam = transform_2d::scaling(0.80f, e.cursor) * cam;
             break;
         case input::mouse_down: case input::mouse_up:
             switch(e.button)

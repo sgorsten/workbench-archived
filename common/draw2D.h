@@ -19,8 +19,8 @@ using namespace linalg::aliases;
 
 struct sprite
 {
-    std::shared_ptr<const uint8_t> pixels; int2 dims; // The bitmap of per-pixel alpha values
-    float s0, t0, s1, t1;                             // The subrect of this sprite within the texture atlas
+    std::shared_ptr<const uint8_t> pixels; int2 dims; bool border; // The bitmap of per-pixel alpha values
+    float s0, t0, s1, t1;                                          // The subrect of this sprite within the texture atlas
 };
 
 class sprite_sheet
@@ -102,9 +102,6 @@ struct sprite_library
     sprite_library();
 };
 
-// The purpose of this class is to support a handful of basic 2D drawing operations (rectangles, circles, rounded rectangles, lines, bezier curves, and text)
-// The resultant geometry is coalesced into a single vertex/index buffer which can be rendered via a single draw call.
-
 struct transform_2d 
 { 
     float scale; float2 translate; 
@@ -119,6 +116,8 @@ struct transform_2d
     static transform_2d scaling(float factor, const float2 & center) { return translation(center) * scaling(factor) * translation(-center); }
 };
 
+// The purpose of this class is to support a handful of basic 2D drawing operations (rectangles, circles, rounded rectangles, lines, bezier curves, and text)
+// The resultant geometry is coalesced into a single vertex/index buffer which can be rendered via a single draw call.
 class draw_buffer_2d
 {
 public:
