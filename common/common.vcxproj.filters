@@ -2,19 +2,15 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="ui.h" />
-    <ClInclude Include="font.h" />
     <ClInclude Include="geometry.h" />
     <ClInclude Include="linalg.h" />
-    <ClInclude Include="sprite.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="draw.h" />
     <ClInclude Include="load.h" />
     <ClInclude Include="draw2D.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="font.cpp" />
     <ClCompile Include="geometry.cpp" />
-    <ClCompile Include="sprite.cpp" />
     <ClCompile Include="ui.cpp" />
     <ClCompile Include="input.cpp" />
     <ClCompile Include="draw.cpp" />

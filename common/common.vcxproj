@@ -21,22 +21,18 @@
   <ItemGroup>
     <ClInclude Include="draw.h" />
     <ClInclude Include="draw2D.h" />
-    <ClInclude Include="font.h" />
     <ClInclude Include="geometry.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="linalg.h" />
     <ClInclude Include="load.h" />
-    <ClInclude Include="sprite.h" />
     <ClInclude Include="ui.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="draw.cpp" />
     <ClCompile Include="draw2D.cpp" />
-    <ClCompile Include="font.cpp" />
     <ClCompile Include="geometry.cpp" />
     <ClCompile Include="input.cpp" />
     <ClCompile Include="load.cpp" />
-    <ClCompile Include="sprite.cpp" />
     <ClCompile Include="ui.cpp" />
   </ItemGroup>
   <ItemGroup>

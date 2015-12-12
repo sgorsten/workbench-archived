@@ -4,12 +4,10 @@
 #ifndef UI_H
 #define UI_H
 
-#include "geometry.h"
-#include "font.h"
 #include "draw2D.h"
+#include "geometry.h"
 #include "draw.h"
 #include "input.h"
-
 
 struct camera
 {

@@ -76,8 +76,8 @@ struct edge
         const auto p1 = float2((p0.x+p3.x)/2, p0.y), p2 = float2((p0.x+p3.x)/2, p3.y);
         buffer.draw_circle(output_node->get_output_location(output_index), 7, {1,1,1,1});
         buffer.draw_circle(input_node->get_input_location(input_index), 7, {1,1,1,1});
-        if(curved) buffer.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
-        else buffer.draw_line(p0, p3, 2, {1,1,1,1});
+        if(curved) buffer.draw_bezier_curve(p0, p1, p2, p3, 3, {1,1,1,1});
+        else buffer.draw_line(p0, p3, 3, {1,1,1,1});
     }
 };
 
