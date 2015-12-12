@@ -121,7 +121,7 @@ public:
     void begin_scissor(const rect & r);
     void end_scissor();
 
-    void draw_quad(const vertex & v0, const vertex & v1, const vertex & v2, const vertex & v3);
+    float scale_factor = 1;
 
     void draw_line(const float2 & p0, const float2 & p1, int width, const float4 & color);
     void draw_bezier_curve(const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color);
@@ -134,8 +134,9 @@ public:
     void draw_sprite(const rect & r, float s0, float t0, float s1, float t1, const float4 & color);
     void draw_text(int2 p, utf8::string_view text, const float4 & color);
     void draw_shadowed_text(int2 p, utf8::string_view text, const float4 & color);
-
 private:
+    void draw_quad(const vertex & v0, const vertex & v1, const vertex & v2, const vertex & v3);
+
     struct list { size_t level,first,last; };
     const sprite_library * library;
     std::vector<vertex> vertices;

@@ -369,27 +369,30 @@ void draw_buffer_2d::draw_quad(const vertex & v0, const vertex & v1, const verte
 
 void draw_buffer_2d::draw_sprite(const rect & r, float s0, float t0, float s1, float t1, const float4 & color)
 {
-    draw_quad({{static_cast<float>(r.x0), static_cast<float>(r.y0)}, {s0,t0}, color},
-              {{static_cast<float>(r.x1), static_cast<float>(r.y0)}, {s1,t0}, color},
-              {{static_cast<float>(r.x1), static_cast<float>(r.y1)}, {s1,t1}, color},
-              {{static_cast<float>(r.x0), static_cast<float>(r.y1)}, {s0,t1}, color});
+    // Sprites are ALWAYS pixel-aligned. This helps avoid sprite bleeding due to texture filtering.
+    draw_quad({{std::round(r.x0 * scale_factor), std::round(r.y0 * scale_factor)}, {s0,t0}, color},
+              {{std::round(r.x1 * scale_factor), std::round(r.y0 * scale_factor)}, {s1,t0}, color},
+              {{std::round(r.x1 * scale_factor), std::round(r.y1 * scale_factor)}, {s1,t1}, color},
+              {{std::round(r.x0 * scale_factor), std::round(r.y1 * scale_factor)}, {s0,t1}, color});
 }
 
 void draw_buffer_2d::draw_line(const float2 & p0, const float2 & p1, int width, const float4 & color)
 {
-    auto it = library->line_sprites.find(width);
+    int adjusted_width = std::max(static_cast<int>(std::round(width * scale_factor)), 1);
+    auto it = library->line_sprites.find(adjusted_width);
     if(it == end(library->line_sprites)) return;
     const auto & sprite = library->sheet.get_sprite(it->second);
-    const float2 perp = normalize(cross(float3(p1-p0,0), float3(0,0,1)).xy()) * ((width+2) * 0.5f);
-    draw_quad({p0+perp, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
-        {p0-perp, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-        {p1-perp, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-        {p1+perp, {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
+    const float2 perp = normalize(cross(float3(p1-p0,0), float3(0,0,1)).xy()) * (width*0.5f + 1/scale_factor);
+    draw_quad({(p0+perp)*scale_factor, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
+              {(p0-perp)*scale_factor, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+              {(p1-perp)*scale_factor, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+              {(p1+perp)*scale_factor, {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
 }
 
 void draw_buffer_2d::draw_bezier_curve(const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color)
 {
-    auto it = library->line_sprites.find(width);
+    int adjusted_width = std::max(static_cast<int>(std::round(width * scale_factor)), 1);
+    auto it = library->line_sprites.find(adjusted_width);
     if(it == end(library->line_sprites)) return;
     const auto & sprite = library->sheet.get_sprite(it->second);
     const float2 d01 = p1-p0, d12 = p2-p1, d23 = p3-p2;
@@ -398,12 +401,12 @@ void draw_buffer_2d::draw_bezier_curve(const float2 & p0, const float2 & p1, con
     {
         float t = i/32, s = (1-t);
         const float2 p = p0*(s*s*s) + p1*(3*s*s*t) + p2*(3*s*t*t) + p3*(t*t*t);
-        const float2 d = normalize(d01*(3*s*s) + d12*(6*s*t) + d23*(3*t*t)) * ((width+2) * 0.5f);
+        const float2 d = normalize(d01*(3*s*s) + d12*(6*s*t) + d23*(3*t*t)) * (width*0.5f + 1/scale_factor);
         const float2 v2 = {p.x-d.y, p.y+d.x}, v3 = {p.x+d.y, p.y-d.x};
-        if(i) draw_quad({v0, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
-            {v1, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-            {v2, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-            {v3, {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
+        if(i) draw_quad({v0*scale_factor, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
+                        {v1*scale_factor, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+                        {v2*scale_factor, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+                        {v3*scale_factor, {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
         v0 = v3;
         v1 = v2;
     }
@@ -422,7 +425,8 @@ static rect take_y0(rect & r, int y) { rect r2 = {r.x0, r.y0, r.x1, r.y0+y}; r.y
 static rect take_y1(rect & r, int y) { rect r2 = {r.x0, r.y1-y, r.x1, r.y1}; r.y1 = r2.y0; return r2; }
 void draw_buffer_2d::draw_partial_rounded_rect(rect r, int radius, const float4 & color, bool tl, bool tr, bool bl, bool br)
 {
-    auto it = library->corner_sprites.find(radius);
+    int adjusted_radius = std::max(static_cast<int>(std::ceilf(radius * scale_factor)), 1);
+    auto it = library->corner_sprites.find(adjusted_radius);
     if(it == end(library->corner_sprites)) return;
     auto & sprite = library->sheet.get_sprite(it->second);
     
