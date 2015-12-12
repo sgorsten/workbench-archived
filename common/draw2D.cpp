@@ -286,8 +286,9 @@ void draw_buffer_2d::begin_frame(const sprite_library & library, const int2 & wi
     indices.clear();
     lists = {{0, 0}};
     scissor = {{0, 0, window_size.x, window_size.y}};
-    scale = {2.0f / window_size.x, -2.0f / window_size.y};
-    translate = {-1, +1};
+    transforms = {{1}};
+    a = {2.0f / window_size.x, -2.0f / window_size.y};
+    b = {-1, +1};
 }
 
 void draw_buffer_2d::end_frame()
@@ -316,8 +317,12 @@ void draw_buffer_2d::end_overlay()
 
 void draw_buffer_2d::begin_scissor(const rect & r)
 {
+    const auto & t = transforms.back();
+    const auto p0 = int2(round(t.transform_point(float2(r.x0, r.y0))));
+    const auto p1 = int2(round(t.transform_point(float2(r.x1, r.y1))));
+
     const auto & s = scissor.back();
-    scissor.push_back({std::max(s.x0, r.x0), std::max(s.y0, r.y0), std::min(s.x1, r.x1), std::min(s.y1, r.y1)});
+    scissor.push_back({std::max(s.x0, p0.x), std::max(s.y0, p0.y), std::min(s.x1, p1.x), std::min(s.y1, p1.y)});
 }
 
 void draw_buffer_2d::end_scissor()
@@ -364,34 +369,34 @@ void draw_buffer_2d::draw_quad(const vertex & v0, const vertex & v1, const verte
         indices.push_back(base+i-1);
         indices.push_back(base+i);
     }
-    for(auto it = a, end = a + n; it != end; ++it) vertices.push_back({it->position * scale + translate, it->texcoord, it->color});
+    for(auto it = a, end = a + n; it != end; ++it) vertices.push_back({it->position * this->a + this->b, it->texcoord, it->color});
 }
 
 void draw_buffer_2d::draw_sprite(const rect & r, float s0, float t0, float s1, float t1, const float4 & color)
 {
     // Sprites are ALWAYS pixel-aligned. This helps avoid sprite bleeding due to texture filtering.
-    draw_quad({{std::round(r.x0 * scale_factor), std::round(r.y0 * scale_factor)}, {s0,t0}, color},
-              {{std::round(r.x1 * scale_factor), std::round(r.y0 * scale_factor)}, {s1,t0}, color},
-              {{std::round(r.x1 * scale_factor), std::round(r.y1 * scale_factor)}, {s1,t1}, color},
-              {{std::round(r.x0 * scale_factor), std::round(r.y1 * scale_factor)}, {s0,t1}, color});
+    draw_quad({round(transform_point(float2(r.x0, r.y0))), {s0,t0}, color},
+              {round(transform_point(float2(r.x1, r.y0))), {s1,t0}, color},
+              {round(transform_point(float2(r.x1, r.y1))), {s1,t1}, color},
+              {round(transform_point(float2(r.x0, r.y1))), {s0,t1}, color});
 }
 
 void draw_buffer_2d::draw_line(const float2 & p0, const float2 & p1, int width, const float4 & color)
 {
-    int adjusted_width = std::max(static_cast<int>(std::round(width * scale_factor)), 1);
+    int adjusted_width = std::max(static_cast<int>(std::round(transform_length(width))), 1);
     auto it = library->line_sprites.find(adjusted_width);
     if(it == end(library->line_sprites)) return;
     const auto & sprite = library->sheet.get_sprite(it->second);
-    const float2 perp = normalize(cross(float3(p1-p0,0), float3(0,0,1)).xy()) * (width*0.5f + 1/scale_factor);
-    draw_quad({(p0+perp)*scale_factor, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
-              {(p0-perp)*scale_factor, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-              {(p1-perp)*scale_factor, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-              {(p1+perp)*scale_factor, {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
+    const float2 perp = normalize(cross(float3(p1-p0,0), float3(0,0,1)).xy()) * (width*0.5f + detransform_length(1));
+    draw_quad({transform_point(p0+perp), {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
+              {transform_point(p0-perp), {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+              {transform_point(p1-perp), {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+              {transform_point(p1+perp), {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
 }
 
 void draw_buffer_2d::draw_bezier_curve(const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color)
 {
-    int adjusted_width = std::max(static_cast<int>(std::round(width * scale_factor)), 1);
+    int adjusted_width = std::max(static_cast<int>(std::round(transform_length(width))), 1);
     auto it = library->line_sprites.find(adjusted_width);
     if(it == end(library->line_sprites)) return;
     const auto & sprite = library->sheet.get_sprite(it->second);
@@ -401,12 +406,12 @@ void draw_buffer_2d::draw_bezier_curve(const float2 & p0, const float2 & p1, con
     {
         float t = i/32, s = (1-t);
         const float2 p = p0*(s*s*s) + p1*(3*s*s*t) + p2*(3*s*t*t) + p3*(t*t*t);
-        const float2 d = normalize(d01*(3*s*s) + d12*(6*s*t) + d23*(3*t*t)) * (width*0.5f + 1/scale_factor);
+        const float2 d = normalize(d01*(3*s*s) + d12*(6*s*t) + d23*(3*t*t)) * (width*0.5f + detransform_length(1));
         const float2 v2 = {p.x-d.y, p.y+d.x}, v3 = {p.x+d.y, p.y-d.x};
-        if(i) draw_quad({v0*scale_factor, {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
-                        {v1*scale_factor, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-                        {v2*scale_factor, {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
-                        {v3*scale_factor, {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
+        if(i) draw_quad({transform_point(v0), {sprite.s0, (sprite.t0+sprite.t1)/2}, color},
+                        {transform_point(v1), {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+                        {transform_point(v2), {sprite.s1, (sprite.t0+sprite.t1)/2}, color},
+                        {transform_point(v3), {sprite.s0, (sprite.t0+sprite.t1)/2}, color});
         v0 = v3;
         v1 = v2;
     }
@@ -425,7 +430,7 @@ static rect take_y0(rect & r, int y) { rect r2 = {r.x0, r.y0, r.x1, r.y0+y}; r.y
 static rect take_y1(rect & r, int y) { rect r2 = {r.x0, r.y1-y, r.x1, r.y1}; r.y1 = r2.y0; return r2; }
 void draw_buffer_2d::draw_partial_rounded_rect(rect r, int radius, const float4 & color, bool tl, bool tr, bool bl, bool br)
 {
-    int adjusted_radius = std::max(static_cast<int>(std::ceilf(radius * scale_factor)), 1);
+    int adjusted_radius = std::max(static_cast<int>(std::ceilf(radius * transforms.back().scale)), 1);
     auto it = library->corner_sprites.find(adjusted_radius);
     if(it == end(library->corner_sprites)) return;
     auto & sprite = library->sheet.get_sprite(it->second);

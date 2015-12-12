@@ -28,7 +28,9 @@ struct node_type
     {
         buffer.draw_partial_rounded_rect({r.x0, r.y0, r.x1, r.y0+title_height}, corner_radius, {0.5f,0.5f,0.5f,1}, true, true, false, false);
         buffer.draw_partial_rounded_rect({r.x0, r.y0+title_height, r.x1, r.y1}, corner_radius, {0.3f,0.3f,0.3f,1}, false, false, true, true);
+        buffer.begin_scissor({r.x0, r.y0, r.x1, r.y0+title_height});
         buffer.draw_shadowed_text({r.x0+8, r.y0+6}, caption, {1,1,1,1});
+        buffer.end_scissor();
 
         for(size_t i=0; i<inputs.size(); ++i)
         {
@@ -74,8 +76,8 @@ struct edge
         const auto p1 = float2((p0.x+p3.x)/2, p0.y), p2 = float2((p0.x+p3.x)/2, p3.y);
         buffer.draw_circle(output_node->get_output_location(output_index) - cam, 7, {1,1,1,1});
         buffer.draw_circle(input_node->get_input_location(input_index) - cam, 7, {1,1,1,1});
-        if(curved) buffer.draw_bezier_curve(p0, p1, p2, p3, 3, {1,1,1,1});
-        else buffer.draw_line(p0, p3, 3, {1,1,1,1});
+        if(curved) buffer.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
+        else buffer.draw_line(p0, p3, 2, {1,1,1,1});
     }
 };
 
@@ -95,7 +97,7 @@ int main()
 
     GLuint tex = make_sprite_texture_opengl(sprites.sheet);
 
-    const node_type type = {"Graph Node", {"Input 1", "Input 2"}, {"Output 1", "Output 2", "Output 3"}};
+    const node_type type = {"Graph Node with a long title that will clip the edge of the node", {"Input 1", "Input 2"}, {"Output 1", "Output 2", "Output 3"}};
     const node nodes[] = {
         {&type, {50,50,300,250}},
         {&type, {650,150,900,350}}
@@ -105,7 +107,7 @@ int main()
         {&nodes[0], 2, &nodes[1], 1, true}
     };
 
-    float2 cam = {0,0}; float scale = 1;
+    transform_2d cam = {1,{0,0}};
     bool ml = false, mr = false;
     while(!glfwWindowShouldClose(win))
     {
@@ -113,11 +115,11 @@ int main()
         for(const auto & e : events) switch(e.type)
         {
         case input::scroll:
+            if(e.scroll.y != 0)
             {
-                float2 cursor_coord = cam + e.cursor/scale;
-                if(e.scroll.y > 0) scale = std::min(scale * 1.2f, 1.0f);
-                if(e.scroll.y < 0) scale /= 1.2f;
-                cam = cursor_coord - e.cursor/scale;
+                const float factor = e.scroll.y > 0 ? 1.25f : 0.8f;
+                const float scale = std::min(cam.scale * factor, 1.0f) / cam.scale;
+                cam = transform_2d::scaling(scale, e.cursor) * cam;
             }
             break;
         case input::mouse_down: case input::mouse_up:
@@ -128,7 +130,7 @@ int main()
             }
             break;
         case input::cursor_motion:
-            if(ml) cam -= e.motion/scale;
+            if(ml) cam = transform_2d::translation(e.motion) * cam;
             break;
         }
         events.clear();
@@ -136,9 +138,10 @@ int main()
         int w, h;
         glfwGetWindowSize(win, &w, &h);
         buffer.begin_frame(sprites, {w, h});
-        buffer.scale_factor = scale;
-        for(auto & n : nodes) n.draw(buffer, int2(cam));
-        for(auto & e : edges) e.draw(buffer, int2(cam));
+        buffer.begin_transform(cam);    
+        for(auto & n : nodes) n.draw(buffer, int2(0));
+        for(auto & e : edges) e.draw(buffer, int2(0));
+        buffer.end_transform();
         buffer.end_frame();
 
         glClear(GL_COLOR_BUFFER_BIT);

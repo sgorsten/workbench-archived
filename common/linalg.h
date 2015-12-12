@@ -16,7 +16,7 @@ namespace linalg
                                     vec()                       : x(), y() {}
                                     vec(T x, T y)               : x(x), y(y) {}
         explicit                    vec(T s)                    : vec(s, s) {}
-        template<class U> explicit  vec(vec<U,2> & v)           : vec(static_cast<T>(v.x), static_cast<T>(v.y)) {}
+        template<class U> explicit  vec(const vec<U,2> & v)     : vec(static_cast<T>(v.x), static_cast<T>(v.y)) {}
         const T &                   operator[] (int i) const    { return (&x)[i]; }
         T &                         operator[] (int i)          { return (&x)[i]; }
     };
@@ -27,7 +27,7 @@ namespace linalg
                                     vec(T x, T y, T z)          : x(x), y(y), z(z) {}
                                     vec(vec<T,2> xy, T z)       : vec(xy.x, xy.y, z) {}
         explicit                    vec(T s)                    : vec(s, s, s) {}
-        template<class U> explicit  vec(vec<U,3> & v)           : vec(static_cast<T>(v.x), static_cast<T>(v.y), static_cast<T>(v.z)) {}
+        template<class U> explicit  vec(const vec<U,3> & v)     : vec(static_cast<T>(v.x), static_cast<T>(v.y), static_cast<T>(v.z)) {}
         const vec<T,2> &            xy() const                  { return reinterpret_cast<const vec<T,2> &>(x); }
         const T &                   operator[] (int i) const    { return (&x)[i]; }
         T &                         operator[] (int i)          { return (&x)[i]; }
@@ -39,7 +39,7 @@ namespace linalg
                                     vec(T x, T y, T z, T w)     : x(x), y(y), z(z), w(w) {}
                                     vec(vec<T,3> xyz, T w)      : vec(xyz.x, xyz.y, xyz.z, w) {}
         explicit                    vec(T s)                    : vec(s, s, s, s) {}
-        template<class U> explicit  vec(vec<U,4> & v)           : vec(static_cast<T>(v.x), static_cast<T>(v.y), static_cast<T>(v.z), static_cast<T>(v.w)) {}
+        template<class U> explicit  vec(const vec<U,4> & v)     : vec(static_cast<T>(v.x), static_cast<T>(v.y), static_cast<T>(v.z), static_cast<T>(v.w)) {}
         const vec<T,3> &            xyz() const                 { return reinterpret_cast<const vec<T,3> &>(x); }
         const T &                   operator[] (int i) const    { return (&x)[i]; }
         T &                         operator[] (int i)          { return (&x)[i]; }
@@ -91,6 +91,7 @@ namespace linalg
     template<class T, int N> T        mag2      (const vec<T,N> & a)                          { return dot(a,a); }
     template<class T, int N> T        mag       (const vec<T,N> & a)                          { return std::sqrt(mag2(a)); }
     template<class T, int N> vec<T,N> normalize (const vec<T,N> & a)                          { return a / mag(a); }
+    template<class T, int N> vec<T,N> round     (const vec<T,N> & a)                          { return componentwise_apply(a, a, [](T l, T) { return std::round(l); }); }
 
     template<class T> vec<T,4> qconj (const vec<T,4> & q)                     { return {-q.x,-q.y,-q.z,q.w}; }
     template<class T> vec<T,4> qmul  (const vec<T,4> & a, const vec<T,4> & b) { return {a.x*b.w+a.w*b.x+a.y*b.z-a.z*b.y, a.y*b.w+a.w*b.y+a.z*b.x-a.x*b.z, a.z*b.w+a.w*b.z+a.x*b.y-a.y*b.x, a.w*b.w-a.x*b.x-a.y*b.y-a.z*b.z}; }

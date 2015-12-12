@@ -104,6 +104,21 @@ struct sprite_library
 
 // The purpose of this class is to support a handful of basic 2D drawing operations (rectangles, circles, rounded rectangles, lines, bezier curves, and text)
 // The resultant geometry is coalesced into a single vertex/index buffer which can be rendered via a single draw call.
+
+struct transform_2d 
+{ 
+    float scale; float2 translate; 
+    const float2 transform_point(const float2 & point) const { return point * scale + translate; }
+    const float2 detransform_point(const float2 & point) const { return (point - translate) / scale; }
+
+    friend transform_2d operator * (const transform_2d & a, const transform_2d & b) { return {a.scale*b.scale, a.transform_point(b.translate)}; }
+    friend transform_2d & operator *= (transform_2d & a, const transform_2d & b) { return a = a * b; }
+
+    static transform_2d translation(const float2 & offset) { return {1,offset}; }
+    static transform_2d scaling(float factor) { return {factor,{0,0}}; }
+    static transform_2d scaling(float factor, const float2 & center) { return translation(center) * scaling(factor) * translation(-center); }
+};
+
 class draw_buffer_2d
 {
 public:
@@ -114,14 +129,19 @@ public:
     const std::vector<uint16_t> & get_indices() const { return out_indices; }
     const rect & get_scissor_rect() const { return scissor.back(); }
 
+    const float transform_length(float length) const { return length * transforms.back().scale; }
+    const float detransform_length(float length) const { return length / transforms.back().scale; }
+    const float2 transform_point(const float2 & point) const { return transforms.back().transform_point(point); }
+    const float2 detransform_point(const float2 & point) const { return transforms.back().detransform_point(point); }
+
     void begin_frame(const sprite_library & library, const int2 & window_size);
     void end_frame();
     void begin_overlay();
     void end_overlay();
+    void begin_transform(const transform_2d & t) { transforms.push_back(transforms.back() * t); }
+    void end_transform() { transforms.pop_back(); }
     void begin_scissor(const rect & r);
     void end_scissor();
-
-    float scale_factor = 1;
 
     void draw_line(const float2 & p0, const float2 & p1, int width, const float4 & color);
     void draw_bezier_curve(const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color);
@@ -143,7 +163,8 @@ private:
     std::vector<uint16_t> indices, out_indices;
     std::vector<list> lists;
     std::vector<rect> scissor;
-    float2 scale, translate;
+    std::vector<transform_2d> transforms;
+    float2 a, b;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
