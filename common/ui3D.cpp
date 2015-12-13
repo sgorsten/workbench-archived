@@ -11,7 +11,7 @@ ray camera::get_ray_from_pixel(const float2 & pixel, const rect & viewport) cons
     return {position, p1.xyz()*p0.w - p0.xyz()*p1.w};
 }
 
-gui3D::gui3D(gui & g) : g(g), bf(), bl(), bb(), br(), ml(), mr(), cam({}), gizmode()
+gui3D::gui3D(gui & g) : g(g), bf(), bl(), bb(), br(), ml(), mr(), timestep(), cam({}), gizmode()
 {
     std::initializer_list<float2> arrow_points = {{0, 0.05f}, {1, 0.05f}, {1, 0.10f}, {1.2f, 0}};
     std::initializer_list<float2> ring_points = {{+0.05f, 1}, {-0.05f, 1}, {-0.05f, 1}, {-0.05f, 1.2f}, {-0.05f, 1.2f}, {+0.05f, 1.2f}, {+0.05f, 1.2f}, {+0.05f, 1}};

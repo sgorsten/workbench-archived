@@ -339,7 +339,7 @@ void viewport_ui(gui3D & g, int id, rect r, std::vector<scene_object *> & object
         if(g.bl) move -= qxdir(orientation);
         if(g.bb) move += qzdir(orientation);
         if(g.br) move += qxdir(orientation);
-        if(mag2(move) > 0) g.cam.position += normalize(move) * (g.g.timestep * 8);
+        if(mag2(move) > 0) g.cam.position += normalize(move) * (g.timestep * 8);
     }
 }
 
@@ -438,7 +438,7 @@ int main(int argc, char * argv[]) try
         glfwGetWindowSize(win, &w, &h);
 
         const double t1 = glfwGetTime();
-        g.timestep = static_cast<float>(t1-t0);
+        g3.timestep = static_cast<float>(t1-t0);
         t0 = t1;
 
         g.begin_frame({w, h});

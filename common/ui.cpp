@@ -22,7 +22,7 @@ bool widget_id::is_parent_of(const widget_id & r, int id) const
     return values[r.values.size()] == id;
 }
 
-gui::gui(sprite_library & sprites) : sprites(sprites), in({}), timestep()
+gui::gui(sprite_library & sprites) : sprites(sprites), in({})
 {
     std::vector<int> codepoints;
     for(int i=0xf000; i<=0xf295; ++i) codepoints.push_back(i);

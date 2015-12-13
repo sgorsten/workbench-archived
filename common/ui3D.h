@@ -33,6 +33,7 @@ struct gui3D
 
     gizmo_resources gizmo_res;
     bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
+    float timestep;                 // Timestep between the last frame and this one
 
     draw_list draw;                 // Draw list for 3D gizmos and the like
     rect viewport3d;                // Current 3D viewport used to render the scene

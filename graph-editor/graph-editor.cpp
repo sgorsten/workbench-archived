@@ -1,5 +1,7 @@
-#include "draw2D.h"
-#include "input.h"
+// This is free and unencumbered software released into the public domain.
+// For more information, please refer to <http://unlicense.org>
+
+#include "ui.h"
 
 void draw_tooltip(draw_buffer_2d & buffer, const int2 & loc, utf8::string_view text)
 {
@@ -24,32 +26,42 @@ struct node_type
     int2 get_input_location(const rect & r, size_t index) const { return {r.x0, r.y0 + title_height + 18 + 24 * (int)index}; }
     int2 get_output_location(const rect & r, size_t index) const { return {r.x1, r.y0 + title_height + 18 + 24 * (int)index}; }
 
-    void draw(draw_buffer_2d & buffer, const rect & r) const
+    void draw(gui & g, const rect & r) const
     {
-        buffer.draw_partial_rounded_rect({r.x0, r.y0, r.x1, r.y0+title_height}, corner_radius, {0.5f,0.5f,0.5f,1}, true, true, false, false);
-        buffer.draw_partial_rounded_rect({r.x0, r.y0+title_height, r.x1, r.y1}, corner_radius, {0.3f,0.3f,0.3f,1}, false, false, true, true);
-        buffer.begin_scissor({r.x0, r.y0, r.x1, r.y0+title_height});
-        buffer.draw_shadowed_text({r.x0+8, r.y0+6}, caption, {1,1,1,1});
-        buffer.end_scissor();
+        g.buffer.draw_partial_rounded_rect({r.x0, r.y0, r.x1, r.y0+title_height}, corner_radius, {0.5f,0.5f,0.5f,1}, true, true, false, false);
+        g.buffer.draw_partial_rounded_rect({r.x0, r.y0+title_height, r.x1, r.y1}, corner_radius, {0.3f,0.3f,0.3f,1}, false, false, true, true);
+        g.buffer.begin_scissor({r.x0, r.y0, r.x1, r.y0+title_height});
+        g.buffer.draw_shadowed_text({r.x0+8, r.y0+6}, caption, {1,1,1,1});
+        g.buffer.end_scissor();
 
         for(size_t i=0; i<inputs.size(); ++i)
         {
             const auto loc = get_input_location(r,i);
-            buffer.draw_circle(loc, 8, {1,1,1,1});
-            buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
-            buffer.draw_shadowed_text(loc + int2(12, -buffer.get_library().default_font.line_height/2), inputs[i], {1,1,1,1});
+            g.buffer.draw_circle(loc, 8, {1,1,1,1});
+            g.buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
+            g.buffer.draw_shadowed_text(loc + int2(12, -g.buffer.get_library().default_font.line_height/2), inputs[i], {1,1,1,1});
+
+            if(g.is_cursor_over({loc.x-8, loc.y-8, loc.x+8, loc.y+8}))
+            {
+                draw_tooltip(g.buffer, loc, "This is an input");
+            }
         }
         for(size_t i=0; i<outputs.size(); ++i)
         {
             const auto loc = get_output_location(r,i);
-            buffer.draw_circle(loc, 8, {1,1,1,1});
-            buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
-            buffer.draw_shadowed_text(loc + int2(-12 - buffer.get_library().default_font.get_text_width(outputs[i]), -buffer.get_library().default_font.line_height/2), outputs[i], {1,1,1,1});
+            g.buffer.draw_circle(loc, 8, {1,1,1,1});
+            g.buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
+            g.buffer.draw_shadowed_text(loc + int2(-12 - g.buffer.get_library().default_font.get_text_width(outputs[i]), -g.buffer.get_library().default_font.line_height/2), outputs[i], {1,1,1,1});
 
-            if(i == 1) draw_tooltip(buffer, loc, "Tooltip in an overlay");
+            if(g.is_cursor_over({loc.x-8, loc.y-8, loc.x+8, loc.y+8}))
+            {
+                draw_tooltip(g.buffer, loc, "This is an output");
+            }
         }
     }
 };
+
+#include <iostream>
 
 struct node
 {
@@ -58,7 +70,19 @@ struct node
 
     int2 get_input_location(size_t index) const { return type->get_input_location(placement, index); }
     int2 get_output_location(size_t index) const { return type->get_output_location(placement, index); }
-    void draw(draw_buffer_2d & buffer, const int2 & cam) const { type->draw(buffer, {placement.x0-cam.x, placement.y0-cam.y, placement.x1-cam.x, placement.y1-cam.y}); }
+    void on_gui(gui & g, int id) 
+    { 
+        g.check_click(id, placement);
+        if(g.check_pressed(id))
+        {
+            int2 delta = int2(g.get_cursor() - g.click_offset.xy()) - int2(placement.x0, placement.y0);
+            placement.x0 += delta.x;
+            placement.y0 += delta.y;
+            placement.x1 += delta.x;
+            placement.y1 += delta.y;
+        }
+        type->draw(g, placement); 
+    }
 };
 
 struct edge
@@ -69,13 +93,13 @@ struct edge
     int input_index;
     bool curved;
 
-    void draw(draw_buffer_2d & buffer, const int2 & cam) const
+    void draw(draw_buffer_2d & buffer) const
     {
-        const auto p0 = float2(output_node->get_output_location(output_index) - cam);
-        const auto p3 = float2(input_node->get_input_location(input_index) - cam);
+        const auto p0 = float2(output_node->get_output_location(output_index));
+        const auto p3 = float2(input_node->get_input_location(input_index));
         const auto p1 = float2((p0.x+p3.x)/2, p0.y), p2 = float2((p0.x+p3.x)/2, p3.y);
-        buffer.draw_circle(output_node->get_output_location(output_index) - cam, 7, {1,1,1,1});
-        buffer.draw_circle(input_node->get_input_location(input_index) - cam, 7, {1,1,1,1});
+        buffer.draw_circle(output_node->get_output_location(output_index), 7, {1,1,1,1});
+        buffer.draw_circle(input_node->get_input_location(input_index), 7, {1,1,1,1});
         if(curved) buffer.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
         else buffer.draw_line(p0, p3, 2, {1,1,1,1});
     }
@@ -87,7 +111,7 @@ void render_draw_buffer_opengl(const draw_buffer_2d & buffer, GLuint sprite_text
 int main()
 {
     sprite_library sprites;
-    draw_buffer_2d buffer;
+    gui g(sprites);
 
     glfwInit();
     auto win = glfwCreateWindow(1280, 720, "Draw2D Test", nullptr, nullptr);
@@ -98,7 +122,7 @@ int main()
     GLuint tex = make_sprite_texture_opengl(sprites.sheet);
 
     const node_type type = {"Graph Node with a long title that will clip the edge of the node", {"Input 1", "Input 2"}, {"Output 1", "Output 2", "Output 3"}};
-    const node nodes[] = {
+    node nodes[] = {
         {&type, {50,50,300,250}},
         {&type, {650,150,900,350}}
     };
@@ -111,38 +135,44 @@ int main()
     bool ml = false, mr = false;
     while(!glfwWindowShouldClose(win))
     {
+        g.icon = cursor_icon::arrow;
         glfwPollEvents();
-        for(const auto & e : events) switch(e.type)
+
+        if(events.empty()) emit_empty_event(win);
+        g.in = events.front();
+        events.erase(begin(events));
+
+        switch(g.in.type)
         {
         case input::scroll:
-            if(e.scroll.y > 0) cam = transform_2d::scaling(1.25f, e.cursor) * cam;
-            if(e.scroll.y < 0) cam = transform_2d::scaling(0.80f, e.cursor) * cam;
-            if(cam.scale > 0.85f && cam.scale < 1.20f) cam = transform_2d::scaling(1/cam.scale, e.cursor) * cam;
+            if(g.in.scroll.y > 0) cam = transform_2d::scaling(1.25f, g.in.cursor) * cam;
+            if(g.in.scroll.y < 0) cam = transform_2d::scaling(0.80f, g.in.cursor) * cam;
+            if(cam.scale > 0.85f && cam.scale < 1.20f) cam = transform_2d::scaling(1/cam.scale, g.in.cursor) * cam;
             break;
         case input::mouse_down: case input::mouse_up:
-            switch(e.button)
+            switch(g.in.button)
             {
-            case GLFW_MOUSE_BUTTON_LEFT: ml = e.is_down(); break;
-            case GLFW_MOUSE_BUTTON_RIGHT: mr = e.is_down(); break;
+            case GLFW_MOUSE_BUTTON_LEFT: ml = g.in.is_down(); break;
+            case GLFW_MOUSE_BUTTON_RIGHT: mr = g.in.is_down(); break;
             }
             break;
         case input::cursor_motion:
-            if(ml) cam = transform_2d::translation(e.motion) * cam;
+            if(mr) cam = transform_2d::translation(g.in.motion) * cam;
             break;
         }
-        events.clear();
 
-        int w, h;
-        glfwGetWindowSize(win, &w, &h);
-        buffer.begin_frame(sprites, {w, h});
-        buffer.begin_transform(cam);    
-        for(auto & n : nodes) n.draw(buffer, int2(0));
-        for(auto & e : edges) e.draw(buffer, int2(0));
-        buffer.end_transform();
-        buffer.end_frame();
+        int2 window_size;
+        glfwGetWindowSize(win, &window_size.x, &window_size.y);
+        g.begin_frame(window_size);
+        g.buffer.begin_transform(cam);    
+        for(int i=0; i<2; ++i) nodes[i].on_gui(g, i+1);
+        for(auto & e : edges) e.draw(g.buffer);
+        g.buffer.end_transform();
+
+        g.end_frame();
 
         glClear(GL_COLOR_BUFFER_BIT);
-        render_draw_buffer_opengl(buffer, tex);
+        render_draw_buffer_opengl(g.buffer, tex);
         glfwSwapBuffers(win);
     }
 
