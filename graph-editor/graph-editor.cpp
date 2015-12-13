@@ -61,8 +61,6 @@ struct node_type
     }
 };
 
-#include <iostream>
-
 struct node
 {
     const node_type * type;
@@ -72,7 +70,7 @@ struct node
     int2 get_output_location(size_t index) const { return type->get_output_location(placement, index); }
     void on_gui(gui & g, int id) 
     { 
-        g.check_click(id, placement);
+        if(g.check_click(id, placement)) g.consume_input();
         if(g.check_pressed(id))
         {
             int2 delta = int2(g.get_cursor() - g.click_offset) - int2(placement.x0, placement.y0);
@@ -131,7 +129,6 @@ int main()
     };
 
     transform_2d cam = {1,{0,0}};
-    bool ml = false, mr = false;
     while(!glfwWindowShouldClose(win))
     {
         g.icon = cursor_icon::arrow;
@@ -143,28 +140,10 @@ int main()
         g.begin_frame(window_size, events.front());
         events.erase(begin(events));
 
-        switch(g.in.type)
-        {
-        case input::scroll:
-            if(g.in.scroll.y > 0) cam = transform_2d::scaling(1.25f, g.in.cursor) * cam;
-            if(g.in.scroll.y < 0) cam = transform_2d::scaling(0.80f, g.in.cursor) * cam;
-            if(cam.scale > 0.85f && cam.scale < 1.20f) cam = transform_2d::scaling(1/cam.scale, g.in.cursor) * cam;
-            break;
-        case input::mouse_down: case input::mouse_up:
-            switch(g.in.button)
-            {
-            case GLFW_MOUSE_BUTTON_LEFT: ml = g.in.is_down(); break;
-            case GLFW_MOUSE_BUTTON_RIGHT: mr = g.in.is_down(); break;
-            }
-            break;
-        case input::cursor_motion:
-            if(mr) cam = transform_2d::translation(g.in.motion) * cam;
-            break;
-        }
-
         g.begin_transform(cam);    
         for(int i=0; i<2; ++i) nodes[i].on_gui(g, i+1);
         for(auto & e : edges) e.draw(g.buffer);
+        scrollable_zoomable_background(g, -1, cam);
         g.end_transform();
 
         g.end_frame();

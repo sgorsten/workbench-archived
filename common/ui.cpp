@@ -49,7 +49,7 @@ bool gui::is_cursor_over(const rect & r) const
 
 bool gui::check_click(int id, const rect & r)
 {
-    if(in.type == input::mouse_down && in.button == GLFW_MOUSE_BUTTON_LEFT && is_cursor_over(r))
+    if(is_mouse_down(GLFW_MOUSE_BUTTON_LEFT) && is_cursor_over(r))
     {
         click_offset.x = get_cursor().x - r.x0;
         click_offset.y = get_cursor().y - r.y0;
@@ -63,7 +63,7 @@ bool gui::check_pressed(int id)
 {
     if(is_pressed(id))
     {
-        if(in.type == input::mouse_up && in.button == GLFW_MOUSE_BUTTON_LEFT) pressed_id = {};
+        if(is_mouse_up(GLFW_MOUSE_BUTTON_LEFT)) pressed_id = {};
         else return true;
     }
     return false;
@@ -71,7 +71,7 @@ bool gui::check_pressed(int id)
 
 bool gui::check_release(int id)
 {
-    if(in.type == input::mouse_up && in.button == GLFW_MOUSE_BUTTON_LEFT && is_pressed(id))
+    if(is_mouse_up(GLFW_MOUSE_BUTTON_LEFT) && is_pressed(id))
     {
         pressed_id = {};
         return true;
@@ -380,7 +380,7 @@ void menu_seperator(gui & g)
 
 bool menu_item(gui & g, const std::string & caption, int mods, int key, uint32_t icon)
 {
-    if(key && (mods & g.in.mods) == mods && g.in.type == input::key_down && g.in.key == key) return true;
+    if(key && g.is_key_down(key, mods)) return true;
 
     auto & f = g.menu_stack.back();
     const rect item = get_next_menu_item_rect(g, f.r, caption);
@@ -438,7 +438,7 @@ bool menu_item(gui & g, const std::string & caption, int mods, int key, uint32_t
             }
             g.draw_shadowed_text({item.x0 + 100, item.y0}, ss.str(), {1,1,1,1});
         }
-        if(g.is_cursor_over(item) && g.in.type == input::mouse_down && g.in.button == GLFW_MOUSE_BUTTON_LEFT)
+        if(g.is_cursor_over(item) && g.is_mouse_down(GLFW_MOUSE_BUTTON_LEFT))
         {
             g.in.type = input::none;
             g.focused_id = {};
@@ -468,5 +468,19 @@ void end_popup(gui & g)
 void end_menu(gui & g)
 {
     g.end_children();
-    if(g.in.type == input::mouse_down && g.in.button == GLFW_MOUSE_BUTTON_LEFT && !g.menu_stack.back().clicked) g.focused_id = {};
+    if(g.is_mouse_down(GLFW_MOUSE_BUTTON_LEFT) && !g.menu_stack.back().clicked) g.focused_id = {};
+}
+
+void scrollable_zoomable_background(gui & g, int id, transform_2d & view)
+{
+    if(g.in.type == input::scroll)
+    {
+        if(g.in.scroll.y > 0) view = transform_2d::scaling(1.25f, g.in.cursor) * view;
+        if(g.in.scroll.y < 0) view = transform_2d::scaling(0.80f, g.in.cursor) * view;
+        if(view.scale > 0.85f && view.scale < 1.20f) view = transform_2d::scaling(1/view.scale, g.in.cursor) * view;
+    }
+
+    g.check_release(id);
+    if(g.is_pressed(id)) view = transform_2d::translation(g.in.motion) * view;
+    if(g.is_mouse_down(GLFW_MOUSE_BUTTON_LEFT)) g.set_pressed(id);
 }

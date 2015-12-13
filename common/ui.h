@@ -67,8 +67,12 @@ struct gui
 
     // Input API
     float2 get_cursor() const { return buffer.detransform_point(in.cursor); }
+    bool is_mouse_down(int button) const { return in.type == input::mouse_down && in.button == button; }
+    bool is_mouse_up(int button) const { return in.type == input::mouse_up && in.button == button; }
+    bool is_key_down(int key, int mods = 0) const { return in.type == input::key_down && in.key == key && in.mods == mods; }
     bool is_control_held() const { return (in.mods & GLFW_MOD_CONTROL) != 0; }
     bool is_shift_held() const { return (in.mods & GLFW_MOD_SHIFT) != 0; }
+    void consume_input() { in = {input::none, in.cursor, in.mods}; }
 
     // API for determining clicked status
     bool is_pressed(int id) const { return pressed_id.is_equal_to(current_id, id); }
@@ -105,5 +109,8 @@ bool menu_item(gui & g, const std::string & caption, int mods=0, int key=0, uint
 void menu_seperator(gui & g);
 void end_popup(gui & g);
 void end_menu(gui & g);
+
+// Miscellaneous
+void scrollable_zoomable_background(gui & g, int id, transform_2d & view);
 
 #endif
