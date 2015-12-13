@@ -61,6 +61,8 @@ struct node_type
     }
 };
 
+struct editor_state;
+
 struct node
 {
     const node_type * type;
@@ -68,19 +70,7 @@ struct node
 
     int2 get_input_location(size_t index) const { return type->get_input_location(placement, index); }
     int2 get_output_location(size_t index) const { return type->get_output_location(placement, index); }
-    void on_gui(gui & g, int id) 
-    { 
-        if(g.check_click(id, placement)) g.consume_input();
-        if(g.check_pressed(id))
-        {
-            int2 delta = int2(g.get_cursor() - g.click_offset) - int2(placement.x0, placement.y0);
-            placement.x0 += delta.x;
-            placement.y0 += delta.y;
-            placement.x1 += delta.x;
-            placement.y1 += delta.y;
-        }
-        type->draw(g, placement); 
-    }
+    void on_gui(gui & g, int id, editor_state & state);
 };
 
 struct edge
@@ -89,7 +79,6 @@ struct edge
     int output_index;
     const node * input_node;
     int input_index;
-    bool curved;
 
     void draw(draw_buffer_2d & buffer) const
     {
@@ -98,10 +87,98 @@ struct edge
         const auto p1 = float2((p0.x+p3.x)/2, p0.y), p2 = float2((p0.x+p3.x)/2, p3.y);
         buffer.draw_circle(output_node->get_output_location(output_index), 7, {1,1,1,1});
         buffer.draw_circle(input_node->get_input_location(input_index), 7, {1,1,1,1});
-        if(curved) buffer.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
-        else buffer.draw_line(p0, p3, 2, {1,1,1,1});
+        buffer.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
     }
 };
+
+struct editor_state
+{
+    transform_2d view;
+    std::vector<edge> * edges;
+    edge new_edge;
+
+    void user_edge(gui & g)
+    {
+        if(g.is_pressed(-2))
+        {
+            if(new_edge.input_node)
+            {
+                const auto p0 = float2(new_edge.input_node->get_input_location(new_edge.input_index)), p3 = g.get_cursor();
+                const auto p1 = float2((p0.x+p3.x)/2, p0.y), p2 = float2((p0.x+p3.x)/2, p3.y);
+                g.draw_circle(int2(p0), 7, {1,1,1,1});
+                g.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
+            }
+            if(new_edge.output_node)
+            {
+                const auto p0 = float2(new_edge.output_node->get_output_location(new_edge.output_index)), p3 = g.get_cursor();
+                const auto p1 = float2((p0.x+p3.x)/2, p0.y), p2 = float2((p0.x+p3.x)/2, p3.y);
+                g.draw_circle(int2(p0), 7, {1,1,1,1});
+                g.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
+            }
+            if(g.check_release(-2)) new_edge = {};
+        }
+    }
+
+    void input_pin(gui & g, node * node, size_t pin)
+    {
+        auto loc = node->get_input_location(pin);
+        rect r = {loc.x-8, loc.y-8, loc.x+8, loc.y+8};
+
+        if(g.check_click(-2, r))
+        {
+            new_edge = {};
+            new_edge.input_node = node;
+            new_edge.input_index = pin;
+            g.consume_input();
+        }
+
+        if(g.is_cursor_over(r) && new_edge.output_node && g.check_release(-2))
+        {
+            new_edge.input_node = node;
+            new_edge.input_index = pin;
+            edges->push_back(new_edge);
+            new_edge = {};
+        }
+    }
+
+    void output_pin(gui & g, node * node, size_t pin)
+    {
+        auto loc = node->get_output_location(pin);
+        rect r = {loc.x-8, loc.y-8, loc.x+8, loc.y+8};
+        if(g.check_click(-2, r))
+        {
+            new_edge = {};
+            new_edge.output_node = node;
+            new_edge.output_index = pin;
+            g.consume_input();
+        }
+
+        if(g.is_cursor_over(r) && new_edge.input_node && g.check_release(-2))
+        {
+            new_edge.output_node = node;
+            new_edge.output_index = pin;
+            edges->push_back(new_edge);
+            new_edge = {};
+        }    
+    }
+};
+
+void node::on_gui(gui & g, int id, editor_state & state) 
+{ 
+    for(size_t i=0; i<type->inputs.size(); ++i) state.input_pin(g, this, i);
+    for(size_t i=0; i<type->outputs.size(); ++i) state.output_pin(g, this, i);
+
+    if(g.check_click(id, placement)) g.consume_input();
+    if(g.check_pressed(id))
+    {
+        int2 delta = int2(g.get_cursor() - g.click_offset) - int2(placement.x0, placement.y0);
+        placement.x0 += delta.x;
+        placement.y0 += delta.y;
+        placement.x1 += delta.x;
+        placement.y1 += delta.y;
+    }
+    type->draw(g, placement); 
+}
 
 GLuint make_sprite_texture_opengl(const sprite_sheet & sprites);
 void render_draw_buffer_opengl(const draw_buffer_2d & buffer, GLuint sprite_texture);
@@ -123,12 +200,14 @@ int main()
         {&type, {50,50,300,250}},
         {&type, {650,150,900,350}}
     };
-    const edge edges[] = {
-        {&nodes[0], 0, &nodes[1], 0, false},
-        {&nodes[0], 2, &nodes[1], 1, true}
+    std::vector<edge> edges = {
+        {&nodes[0], 0, &nodes[1], 0},
+        {&nodes[0], 2, &nodes[1], 1}
     };
 
-    transform_2d cam = {1,{0,0}};
+    editor_state state = {};
+    state.view = {1,{0,0}};
+    state.edges = &edges;
     while(!glfwWindowShouldClose(win))
     {
         g.icon = cursor_icon::arrow;
@@ -140,10 +219,11 @@ int main()
         g.begin_frame(window_size, events.front());
         events.erase(begin(events));
 
-        g.begin_transform(cam);    
-        for(int i=0; i<2; ++i) nodes[i].on_gui(g, i+1);
+        g.begin_transform(state.view);    
+        for(int i=0; i<2; ++i) nodes[i].on_gui(g, i+1, state);
         for(auto & e : edges) e.draw(g.buffer);
-        scrollable_zoomable_background(g, -1, cam);
+        state.user_edge(g);
+        scrollable_zoomable_background(g, -1, state.view);
         g.end_transform();
 
         g.end_frame();
