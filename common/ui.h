@@ -77,6 +77,8 @@ struct gui
 
     gui(sprite_library & sprites);
 
+    const float2 & get_cursor() const { return buffer.detransform_point(in.cursor); }
+
     bool is_control_held() const { return (in.mods & GLFW_MOD_CONTROL) != 0; }
     bool is_shift_held() const { return (in.mods & GLFW_MOD_SHIFT) != 0; }
 

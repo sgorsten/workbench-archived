@@ -53,7 +53,7 @@ gui::gui(sprite_library & sprites) : sprites(sprites), bf(), bl(), bb(), br(), m
 bool gui::is_cursor_over(const rect & r) const
 {
     const auto & s = buffer.get_scissor_rect();
-    return in.cursor.x >= r.x0 && in.cursor.y >= r.y0 && in.cursor.x < r.x1 && in.cursor.y < r.y1
+    return get_cursor().x >= r.x0 && get_cursor().y >= r.y0 && get_cursor().x < r.x1 && get_cursor().y < r.y1
         && in.cursor.x >= s.x0 && in.cursor.y >= s.y0 && in.cursor.x < s.x1 && in.cursor.y < s.y1;
 }
 
@@ -61,8 +61,8 @@ bool gui::check_click(int id, const rect & r)
 {
     if(in.type == input::mouse_down && in.button == GLFW_MOUSE_BUTTON_LEFT && is_cursor_over(r))
     {
-        click_offset.x = in.cursor.x - r.x0;
-        click_offset.y = in.cursor.y - r.y0;
+        click_offset.x = get_cursor().x - r.x0;
+        click_offset.y = get_cursor().y - r.y0;
         set_pressed(id);
         return true;
     }
@@ -147,7 +147,7 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
         g.focused_id = g.pressed_id;
     }
     g.check_release(id);
-    if(g.is_pressed(id)) g.text_cursor = g.sprites.default_font.get_cursor_pos(text, g.in.cursor.x - r.x0 - 5);
+    if(g.is_pressed(id)) g.text_cursor = g.sprites.default_font.get_cursor_pos(text, g.get_cursor().x - r.x0 - 5);
 
     bool changed = false;
     if(g.is_focused(id))
@@ -330,7 +330,7 @@ rect tabbed_frame(gui & g, rect r, const std::string & caption)
 
 rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & offset)
 {
-    if(g.check_pressed(id)) offset = (static_cast<int>(g.in.cursor.y - g.click_offset.y) - r.y0) * client_height / r.height();
+    if(g.check_pressed(id)) offset = (static_cast<int>(g.get_cursor().y - g.click_offset.y) - r.y0) * client_height / r.height();
     if(g.is_cursor_over(r)) offset -= static_cast<int>(g.in.scroll.y * 20);
     offset = std::min(offset, client_height - r.height());
     offset = std::max(offset, 0);
@@ -346,7 +346,7 @@ rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & off
 
 std::pair<rect, rect> hsplitter(gui & g, int id, const rect & r, int & split)
 {
-    if(g.check_pressed(id)) split = static_cast<int>(g.in.cursor.x - g.click_offset.x) - r.x0;
+    if(g.check_pressed(id)) split = static_cast<int>(g.get_cursor().x - g.click_offset.x) - r.x0;
     split = std::min(split, r.x1 - 10 - splitbar_width);
     split = std::max(split, r.x0 + 10);
 
@@ -358,7 +358,7 @@ std::pair<rect, rect> hsplitter(gui & g, int id, const rect & r, int & split)
 
 std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split)
 {
-    if(g.check_pressed(id)) split = static_cast<int>(g.in.cursor.y - g.click_offset.y) - r.y0;
+    if(g.check_pressed(id)) split = static_cast<int>(g.get_cursor().y - g.click_offset.y) - r.y0;
     split = std::min(split, r.y1 - 10 - splitbar_width);
     split = std::max(split, r.y0 + 10);
 
@@ -497,7 +497,12 @@ bool menu_item(gui & g, const std::string & caption, int mods, int key, uint32_t
             }
             draw_shadowed_text(g, {item.x0 + 100, item.y0}, {1,1,1,1}, ss.str());
         }
-        if(g.is_cursor_over(item) && g.in.type == input::mouse_down && g.in.button == GLFW_MOUSE_BUTTON_LEFT) return true;
+        if(g.is_cursor_over(item) && g.in.type == input::mouse_down && g.in.button == GLFW_MOUSE_BUTTON_LEFT)
+        {
+            g.in.type = input::none;
+            g.focused_id = {};
+            return true;
+        }
     }
 
     return false;

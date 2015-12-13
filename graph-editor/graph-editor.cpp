@@ -117,6 +117,7 @@ int main()
         case input::scroll:
             if(e.scroll.y > 0) cam = transform_2d::scaling(1.25f, e.cursor) * cam;
             if(e.scroll.y < 0) cam = transform_2d::scaling(0.80f, e.cursor) * cam;
+            if(cam.scale > 0.85f && cam.scale < 1.20f) cam = transform_2d::scaling(1/cam.scale, e.cursor) * cam;
             break;
         case input::mouse_down: case input::mouse_up:
             switch(e.button)
