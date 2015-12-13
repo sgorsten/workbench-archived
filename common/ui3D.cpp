@@ -57,12 +57,12 @@ void gui3D::begin_frame()
 
 void plane_translation_dragger(gui3D & g, const float3 & plane_normal, float3 & point)
 {
-    if(g.g.in.type == input::mouse_down && g.g.in.button == GLFW_MOUSE_BUTTON_LEFT) { g.g.original_position = point; }
+    if(g.g.in.type == input::mouse_down && g.g.in.button == GLFW_MOUSE_BUTTON_LEFT) { g.original_position = point; }
 
     if(g.ml)
     {
         // Define the plane to contain the original position of the object
-        const float3 plane_point = g.g.original_position;
+        const float3 plane_point = g.original_position;
 
         // Define a ray emitting from the camera underneath the cursor
         const ray ray = g.get_ray_from_cursor();
@@ -86,7 +86,7 @@ void axis_translation_dragger(gui3D & g, const float3 & axis, float3 & point)
         plane_translation_dragger(g, plane_normal, point);
 
         // Constrain object motion to be along the desired axis
-        point = g.g.original_position + axis * dot(point - g.g.original_position, axis);
+        point = g.original_position + axis * dot(point - g.original_position, axis);
     }
 }
 
@@ -107,7 +107,7 @@ void position_gizmo(gui3D & g, int id, float3 & position)
         if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[5], &t) && t < best_t) { g.gizmode = gizmo_mode::translate_xy; best_t = t; }
         if(g.gizmode != gizmo_mode::none)
         {
-            g.g.click_offset = ray.origin + ray.direction*t;
+            g.click_offset = ray.origin + ray.direction*t;
             g.g.set_pressed(id);
         }
     }
@@ -115,7 +115,7 @@ void position_gizmo(gui3D & g, int id, float3 & position)
     // If the user has previously clicked on a gizmo component, allow the user to interact with that gizmo
     if(g.g.is_pressed(id))
     {
-        position += g.g.click_offset;
+        position += g.click_offset;
         switch(g.gizmode)
         {
         case gizmo_mode::translate_x: axis_translation_dragger(g, {1,0,0}, position); break;
@@ -125,7 +125,7 @@ void position_gizmo(gui3D & g, int id, float3 & position)
         case gizmo_mode::translate_zx: plane_translation_dragger(g, {0,1,0}, position); break;
         case gizmo_mode::translate_xy: plane_translation_dragger(g, {0,0,1}, position); break;
         }        
-        position -= g.g.click_offset;
+        position -= g.click_offset;
     }
 
     // On release, deactivate the current gizmo mode
@@ -155,24 +155,24 @@ void axis_rotation_dragger(gui3D & g, const float3 & axis, const float3 & center
 {
     if(g.ml)
     {
-        pose original_pose = {g.g.original_orientation, g.g.original_position};
+        pose original_pose = {g.original_orientation, g.original_position};
         float3 the_axis = original_pose.transform_vector(axis);
-        float4 the_plane = {the_axis, -dot(the_axis, g.g.click_offset)};
+        float4 the_plane = {the_axis, -dot(the_axis, g.click_offset)};
         const ray the_ray = g.get_ray_from_cursor();
 
         float t;
         if(intersect_ray_plane(the_ray, the_plane, &t))
         {
-            float3 center_of_rotation = g.g.original_position + the_axis * dot(the_axis, g.g.click_offset - g.g.original_position);
-            float3 arm1 = normalize(g.g.click_offset - center_of_rotation);
+            float3 center_of_rotation = g.original_position + the_axis * dot(the_axis, g.click_offset - g.original_position);
+            float3 arm1 = normalize(g.click_offset - center_of_rotation);
             float3 arm2 = normalize(the_ray.origin + the_ray.direction * t - center_of_rotation); 
 
             float d = dot(arm1, arm2);
-            if(d > 0.999f) { orientation = g.g.original_orientation; return; }
+            if(d > 0.999f) { orientation = g.original_orientation; return; }
             float angle = std::acos(d);
-            if(angle < 0.001f) { orientation = g.g.original_orientation; return; }
+            if(angle < 0.001f) { orientation = g.original_orientation; return; }
             auto a = normalize(cross(arm1, arm2));
-            orientation = qmul(rotation_quat(a, angle), g.g.original_orientation);
+            orientation = qmul(rotation_quat(a, angle), g.original_orientation);
         }
     }
 }
@@ -191,9 +191,9 @@ void orientation_gizmo(gui3D & g, int id, const float3 & center, float4 & orient
         if(intersect_ray_mesh(ray, g.gizmo_res.geomeshes[8], &t) && t < best_t) { g.gizmode = gizmo_mode::rotate_xy; best_t = t; }
         if(g.gizmode != gizmo_mode::none)
         {
-            g.g.original_position = center;
-            g.g.original_orientation = orientation;
-            g.g.click_offset = p.transform_point(ray.origin + ray.direction*t);
+            g.original_position = center;
+            g.original_orientation = orientation;
+            g.click_offset = p.transform_point(ray.origin + ray.direction*t);
             g.g.set_pressed(id);
         }
     }

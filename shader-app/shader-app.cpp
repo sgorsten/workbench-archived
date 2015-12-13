@@ -1,9 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 // For more information, please refer to <http://unlicense.org>
 
-#include "draw.h"
-#include "input.h"
-#include "ui.h"
+#include "ui3D.h"
 #include "load.h"
 
 #include <cassert>

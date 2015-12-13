@@ -38,13 +38,9 @@ struct gui
     widget_id current_id;
     widget_id pressed_id;
     widget_id focused_id;
+    float2 click_offset;
 
     std::string::size_type text_cursor, text_mark;
-
-    float3 original_position;       // Original position of an object being manipulated with a gizmo
-    float4 original_orientation;    // Original orientation of an object being manipulated with a gizmo
-    float3 click_offset;            // Offset from position of grabbed object to coordinates of clicked point
-
     std::vector<menu_stack_frame> menu_stack;
 
     gui(sprite_library & sprites);

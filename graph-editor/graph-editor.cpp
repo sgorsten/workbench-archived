@@ -75,7 +75,7 @@ struct node
         g.check_click(id, placement);
         if(g.check_pressed(id))
         {
-            int2 delta = int2(g.get_cursor() - g.click_offset.xy()) - int2(placement.x0, placement.y0);
+            int2 delta = int2(g.get_cursor() - g.click_offset) - int2(placement.x0, placement.y0);
             placement.x0 += delta.x;
             placement.y0 += delta.y;
             placement.x1 += delta.x;
