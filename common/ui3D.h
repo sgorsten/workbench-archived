@@ -32,6 +32,7 @@ struct gui3D
     gui & g;
 
     gizmo_resources gizmo_res;
+    bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
 
     draw_list draw;                 // Draw list for 3D gizmos and the like
     rect viewport3d;                // Current 3D viewport used to render the scene
@@ -40,7 +41,7 @@ struct gui3D
 
     gui3D(gui & g);
 
-    void begin_frame() { draw = {}; }
+    void begin_frame();
 
     // API for doing computations in 3D space
     float4x4 get_view_matrix() const { return cam.get_view_matrix(); }

@@ -11,7 +11,7 @@ ray camera::get_ray_from_pixel(const float2 & pixel, const rect & viewport) cons
     return {position, p1.xyz()*p0.w - p0.xyz()*p1.w};
 }
 
-gui3D::gui3D(gui & g) : g(g), cam({}), gizmode()
+gui3D::gui3D(gui & g) : g(g), bf(), bl(), bb(), br(), ml(), mr(), cam({}), gizmode()
 {
     std::initializer_list<float2> arrow_points = {{0, 0.05f}, {1, 0.05f}, {1, 0.10f}, {1.2f, 0}};
     std::initializer_list<float2> ring_points = {{+0.05f, 1}, {-0.05f, 1}, {-0.05f, 1}, {-0.05f, 1.2f}, {-0.05f, 1.2f}, {+0.05f, 1.2f}, {+0.05f, 1.2f}, {+0.05f, 1}};
@@ -26,6 +26,31 @@ gui3D::gui3D(gui & g) : g(g), cam({}), gizmode()
     gizmo_res.geomeshes[8] = make_lathed_geometry({0,0,1}, {1,0,0}, {0,1,0}, 24, ring_points);
 }
 
+void gui3D::begin_frame() 
+{ 
+    draw = {}; 
+    
+    switch(g.in.type)
+    {
+    case input::key_down: case input::key_up:
+        switch(g.in.key)
+        {
+        case GLFW_KEY_W: bf = g.in.is_down(); break;
+        case GLFW_KEY_A: bl = g.in.is_down(); break;
+        case GLFW_KEY_S: bb = g.in.is_down(); break;
+        case GLFW_KEY_D: br = g.in.is_down(); break;
+        }
+        break;
+    case input::mouse_down: case input::mouse_up:               
+        switch(g.in.button)
+        {
+        case GLFW_MOUSE_BUTTON_LEFT: ml = g.in.is_down(); break;
+        case GLFW_MOUSE_BUTTON_RIGHT: mr = g.in.is_down(); break;
+        }
+        break;
+    }    
+}
+
 /////////////////
 // 3D controls //
 /////////////////
@@ -34,7 +59,7 @@ void plane_translation_dragger(gui3D & g, const float3 & plane_normal, float3 & 
 {
     if(g.g.in.type == input::mouse_down && g.g.in.button == GLFW_MOUSE_BUTTON_LEFT) { g.g.original_position = point; }
 
-    if(g.g.ml)
+    if(g.ml)
     {
         // Define the plane to contain the original position of the object
         const float3 plane_point = g.g.original_position;
@@ -53,7 +78,7 @@ void plane_translation_dragger(gui3D & g, const float3 & plane_normal, float3 & 
 
 void axis_translation_dragger(gui3D & g, const float3 & axis, float3 & point)
 {
-    if(g.g.ml)
+    if(g.ml)
     {
         // First apply a plane translation dragger with a plane that contains the desired axis and is oriented to face the camera
         const float3 plane_tangent = cross(axis, point - g.cam.position);
@@ -128,7 +153,7 @@ void position_gizmo(gui3D & g, int id, float3 & position)
 
 void axis_rotation_dragger(gui3D & g, const float3 & axis, const float3 & center, float4 & orientation)
 {
-    if(g.g.ml)
+    if(g.ml)
     {
         pose original_pose = {g.g.original_orientation, g.g.original_position};
         float3 the_axis = original_pose.transform_vector(axis);

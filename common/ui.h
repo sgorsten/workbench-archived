@@ -29,7 +29,6 @@ struct gui
     draw_buffer_2d buffer;
 
     int2 window_size;               // Size in pixels of the current window
-    bool bf, bl, bb, br, ml, mr;    // Instantaneous state of WASD keys and left/right mouse buttons
     input_event in;
     float timestep;                 // Timestep between the last frame and this one
     clipboard_event clip_event;

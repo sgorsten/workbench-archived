@@ -257,7 +257,7 @@ void object_list_ui(gui3D & g, int id, rect r, const std::vector<scene_object *>
 {
     r = tabbed_frame(g.g, r, "Object List");
 
-    auto panel = vscroll_panel(g.g, id, r, objects.size()*30+20, offset);
+    auto panel = vscroll_panel(g.g, id, r, objects.size()*(g.g.sprites.default_font.line_height+4)+4, offset);
     g.g.begin_children(id);
     g.g.begin_scissor(panel);
     int y0 = panel.y0 + 4 - offset;
@@ -328,17 +328,17 @@ void viewport_ui(gui3D & g, int id, rect r, std::vector<scene_object *> & object
         }
     }
 
-    if(g.g.mr)
+    if(g.mr)
     {
         g.cam.yaw -= g.g.in.motion.x * 0.01f;
         g.cam.pitch -= g.g.in.motion.y * 0.01f;
 
         const float4 orientation = g.cam.get_orientation();
         float3 move;
-        if(g.g.bf) move -= qzdir(orientation);
-        if(g.g.bl) move -= qxdir(orientation);
-        if(g.g.bb) move += qzdir(orientation);
-        if(g.g.br) move += qxdir(orientation);
+        if(g.bf) move -= qzdir(orientation);
+        if(g.bl) move -= qxdir(orientation);
+        if(g.bb) move += qzdir(orientation);
+        if(g.br) move += qxdir(orientation);
         if(mag2(move) > 0) g.cam.position += normalize(move) * (g.g.timestep * 8);
     }
 }
@@ -432,25 +432,6 @@ int main(int argc, char * argv[]) try
         if(events.empty()) emit_empty_event(win);
         g.in = events.front();
         events.erase(begin(events));
-        switch(g.in.type)
-        {
-        case input::key_down: case input::key_up:
-            switch(g.in.key)
-            {
-            case GLFW_KEY_W: g.bf = g.in.is_down(); break;
-            case GLFW_KEY_A: g.bl = g.in.is_down(); break;
-            case GLFW_KEY_S: g.bb = g.in.is_down(); break;
-            case GLFW_KEY_D: g.br = g.in.is_down(); break;
-            }
-            break;
-        case input::mouse_down: case input::mouse_up:               
-            switch(g.in.button)
-            {
-            case GLFW_MOUSE_BUTTON_LEFT: g.ml = g.in.is_down(); break;
-            case GLFW_MOUSE_BUTTON_RIGHT: g.mr = g.in.is_down(); break;
-            }
-            break;
-        }
 
         int fw, fh, w, h;
         glfwGetFramebufferSize(win, &fw, &fh);
