@@ -2,7 +2,7 @@
 // For more information, please refer to <http://unlicense.org>
 
 #include "load.h"
-#include "ui.h"
+#include "ui3D.h"
 
 #include <cassert>
 #include <cstdlib>
@@ -253,20 +253,20 @@ float3 get_center_of_mass(const std::set<scene_object *> & objects)
     return sum / (float)objects.size();
 }
 
-void object_list_ui(gui & g, int id, rect r, const std::vector<scene_object *> & objects, std::set<scene_object *> & selection, int & offset)
+void object_list_ui(gui3D & g, int id, rect r, const std::vector<scene_object *> & objects, std::set<scene_object *> & selection, int & offset)
 {
-    r = tabbed_frame(g, r, "Object List");
+    r = tabbed_frame(g.g, r, "Object List");
 
-    auto panel = vscroll_panel(g, id, r, objects.size()*30+20, offset);
-    g.begin_children(id);
-    g.begin_scissor(panel);
+    auto panel = vscroll_panel(g.g, id, r, objects.size()*30+20, offset);
+    g.g.begin_children(id);
+    g.g.begin_scissor(panel);
     int y0 = panel.y0 + 4 - offset;
     for(auto * obj : objects)
     {
-        const rect list_entry = {panel.x0 + 4, y0, panel.x1 - 4, y0 + g.sprites.default_font.line_height};
-        if(g.check_click(&obj - objects.data(), list_entry))
+        const rect list_entry = {panel.x0 + 4, y0, panel.x1 - 4, y0 + g.g.sprites.default_font.line_height};
+        if(g.g.check_click(&obj - objects.data(), list_entry))
         {
-            if(!g.is_control_held()) selection.clear();
+            if(!g.g.is_control_held()) selection.clear();
             auto it = selection.find(obj);
             if(it == end(selection)) selection.insert(obj);
             else selection.erase(it);
@@ -274,11 +274,11 @@ void object_list_ui(gui & g, int id, rect r, const std::vector<scene_object *> &
         }
 
         bool selected = selection.find(obj) != end(selection);
-        draw_shadowed_text(g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj->name);
-        y0 += g.sprites.default_font.line_height + 4;
+        draw_shadowed_text(g.g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj->name);
+        y0 += g.g.sprites.default_font.line_height + 4;
     }
-    g.end_scissor();
-    g.end_children();
+    g.g.end_scissor();
+    g.g.end_children();
 }
 
 void object_properties_ui(gui & g, int id, rect r, std::set<scene_object *> & selection, int & offset)
@@ -297,26 +297,26 @@ void object_properties_ui(gui & g, int id, rect r, std::set<scene_object *> & se
     g.end_children();
 }
 
-void viewport_ui(gui & g, int id, rect r, std::vector<scene_object *> & objects, std::set<scene_object *> & selection)
+void viewport_ui(gui3D & g, int id, rect r, std::vector<scene_object *> & objects, std::set<scene_object *> & selection)
 {
-    g.viewport3d = r = tabbed_frame(g, r, "Scene View");
+    g.viewport3d = r = tabbed_frame(g.g, r, "Scene View");
 
     if(!selection.empty())
     {
-        g.begin_children(id);
+        g.g.begin_children(id);
         auto * obj = *selection.begin();
         float3 com = get_center_of_mass(selection), new_com = com;
         position_gizmo(g, 1, new_com);
         if(new_com != com) for(auto obj : selection) obj->p.position += new_com - com;
-        g.end_children();
+        g.g.end_children();
     }
-    if(g.is_child_pressed(id)) return;
+    if(g.g.is_child_pressed(id)) return;
 
-    if(g.check_click(id, r))
+    if(g.g.check_click(id, r))
     {
-        if(!selection.empty() && g.gizmode == gizmo_mode::none && !g.is_control_held()) selection.clear();
+        if(!selection.empty() && g.gizmode == gizmo_mode::none && !g.g.is_control_held()) selection.clear();
 
-        if(selection.empty() || g.is_control_held())
+        if(selection.empty() || g.g.is_control_held())
         {
             if(auto picked_object = raycast(g.get_ray_from_cursor(), objects))
             {
@@ -328,18 +328,18 @@ void viewport_ui(gui & g, int id, rect r, std::vector<scene_object *> & objects,
         }
     }
 
-    if(g.mr)
+    if(g.g.mr)
     {
-        g.cam.yaw -= g.in.motion.x * 0.01f;
-        g.cam.pitch -= g.in.motion.y * 0.01f;
+        g.cam.yaw -= g.g.in.motion.x * 0.01f;
+        g.cam.pitch -= g.g.in.motion.y * 0.01f;
 
         const float4 orientation = g.cam.get_orientation();
         float3 move;
-        if(g.bf) move -= qzdir(orientation);
-        if(g.bl) move -= qxdir(orientation);
-        if(g.bb) move += qzdir(orientation);
-        if(g.br) move += qxdir(orientation);
-        if(mag2(move) > 0) g.cam.position += normalize(move) * (g.timestep * 8);
+        if(g.g.bf) move -= qzdir(orientation);
+        if(g.g.bl) move -= qxdir(orientation);
+        if(g.g.bb) move += qzdir(orientation);
+        if(g.g.br) move += qxdir(orientation);
+        if(mag2(move) > 0) g.cam.position += normalize(move) * (g.g.timestep * 8);
     }
 }
 
@@ -364,10 +364,11 @@ int main(int argc, char * argv[]) try
     sprite_library sprites;
 
     gui g(sprites);
-    g.cam.yfov = 1.0f;
-    g.cam.near_clip = 0.1f;
-    g.cam.far_clip = 16.0f;
-    g.cam.position = {0,1.5f,4};
+    gui3D g3(g);
+    g3.cam.yfov = 1.0f;
+    g3.cam.near_clip = 0.1f;
+    g3.cam.far_clip = 16.0f;
+    g3.cam.position = {0,1.5f,4};
        
     auto ctx = gfx::create_context();
     auto vert_shader = compile_shader(ctx, GL_VERTEX_SHADER, vert_shader_source);
@@ -406,8 +407,8 @@ int main(int argc, char * argv[]) try
     gui_resources gui_res;
     gui_res.init_resources(ctx, sprites.sheet);
 
-    g.gizmo_res.program = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
-    for(int i=0; i<9; ++i) g.gizmo_res.meshes[i] = make_draw_mesh(ctx, g.gizmo_res.geomeshes[i]);
+    g3.gizmo_res.program = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
+    for(int i=0; i<9; ++i) g3.gizmo_res.meshes[i] = make_draw_mesh(ctx, g3.gizmo_res.geomeshes[i]);
 
     renderer the_renderer;
     
@@ -460,6 +461,7 @@ int main(int argc, char * argv[]) try
         t0 = t1;
 
         g.begin_frame({w, h});
+        g3.begin_frame();
 
         // Experimental support for a menu bar
         begin_menu(g, 1, {0, 0, w, 20});
@@ -510,9 +512,9 @@ int main(int argc, char * argv[]) try
         end_menu(g);
 
         auto s = hsplitter(g, 2, {0, 21, w, h}, split1);
-        viewport_ui(g, 3, s.first, objects, selection);
+        viewport_ui(g3, 3, s.first, objects, selection);
         s = vsplitter(g, 4, s.second, split2);
-        object_list_ui(g, 5, s.first, objects, selection, offset0);
+        object_list_ui(g3, 5, s.first, objects, selection, offset0);
         object_properties_ui(g, 6, s.second, selection, offset1);
         g.end_frame();
 
@@ -531,8 +533,8 @@ int main(int argc, char * argv[]) try
 
         const auto * per_scene = get_desc(*program).get_block_desc("PerScene");
         std::vector<byte> scene_buffer(per_scene->data_size);
-        per_scene->set_uniform(scene_buffer.data(), "u_viewProj", g.get_viewproj_matrix());
-        per_scene->set_uniform(scene_buffer.data(), "u_eyePos", g.cam.position);
+        per_scene->set_uniform(scene_buffer.data(), "u_viewProj", g3.get_viewproj_matrix());
+        per_scene->set_uniform(scene_buffer.data(), "u_eyePos", g3.cam.position);
         per_scene->set_uniform(scene_buffer.data(), "u_lightPos", plight->p.position);
         per_scene->set_uniform(scene_buffer.data(), "u_lightColor", plight->color);
 
@@ -548,8 +550,8 @@ int main(int argc, char * argv[]) try
         glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_BLEND);
-        the_renderer.draw_scene(win, g.viewport3d, per_scene, scene_buffer.data(), list);
-        the_renderer.draw_scene(win, g.viewport3d, per_scene, scene_buffer.data(), g.draw);
+        the_renderer.draw_scene(win, g3.viewport3d, per_scene, scene_buffer.data(), list);
+        the_renderer.draw_scene(win, g3.viewport3d, per_scene, scene_buffer.data(), g3.draw);
 
         glDisable(GL_CULL_FACE);
         glDisable(GL_DEPTH_TEST);

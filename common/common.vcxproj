@@ -26,6 +26,7 @@
     <ClInclude Include="linalg.h" />
     <ClInclude Include="load.h" />
     <ClInclude Include="ui.h" />
+    <ClInclude Include="ui3D.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="draw.cpp" />
@@ -34,6 +35,7 @@
     <ClCompile Include="input.cpp" />
     <ClCompile Include="load.cpp" />
     <ClCompile Include="ui.cpp" />
+    <ClCompile Include="ui3D.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

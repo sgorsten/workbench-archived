@@ -1,0 +1,58 @@
+// This is free and unencumbered software released into the public domain.
+// For more information, please refer to <http://unlicense.org>
+
+#ifndef UI_3D_H
+#define UI_3D_H
+
+#include "draw.h"
+#include "ui.h"
+#include "geometry.h"
+
+struct camera
+{
+    float yfov, near_clip, far_clip;
+    float3 position;
+    float pitch, yaw;
+    float4 get_orientation() const { return qmul(rotation_quat(float3(0,1,0), yaw), rotation_quat(float3(1,0,0), pitch)); }
+    float4x4 get_view_matrix() const { return rotation_matrix(qconj(get_orientation())) * translation_matrix(-position); }
+    float4x4 get_projection_matrix(const rect & viewport) const { return perspective_matrix(yfov, viewport.aspect_ratio(), near_clip, far_clip); }
+    float4x4 get_viewproj_matrix(const rect & viewport) const { return get_projection_matrix(viewport) * get_view_matrix(); }
+    ray get_ray_from_pixel(const float2 & pixel, const rect & viewport) const;
+};
+
+struct gizmo_resources
+{
+    geometry_mesh geomeshes[9];
+    std::shared_ptr<const gfx::program> program;
+    std::shared_ptr<const gfx::mesh> meshes[9];
+};
+
+struct gui3D
+{
+    gui & g;
+
+    gizmo_resources gizmo_res;
+
+    draw_list draw;                 // Draw list for 3D gizmos and the like
+    rect viewport3d;                // Current 3D viewport used to render the scene
+    camera cam;                     // Current 3D camera used to render the scene
+    gizmo_mode gizmode;             // Mode that the gizmo is currently in
+
+    gui3D(gui & g);
+
+    void begin_frame() { draw = {}; }
+
+    // API for doing computations in 3D space
+    float4x4 get_view_matrix() const { return cam.get_view_matrix(); }
+    float4x4 get_projection_matrix() const { return cam.get_projection_matrix(viewport3d); }
+    float4x4 get_viewproj_matrix() const { return cam.get_viewproj_matrix(viewport3d); }
+    ray get_ray_from_cursor() const { return cam.get_ray_from_pixel(g.in.cursor, viewport3d); }
+};
+
+// 3D manipulation interactions
+void plane_translation_dragger(gui3D & g, const float3 & plane_normal, float3 & point);
+void axis_translation_dragger(gui3D & g, const float3 & axis, float3 & point);
+void position_gizmo(gui3D & g, int id, float3 & position);
+void orientation_gizmo(gui3D & g, int id, const float3 & center, float4 & orientation);
+
+#endif

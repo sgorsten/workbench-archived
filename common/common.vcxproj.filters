@@ -8,6 +8,7 @@
     <ClInclude Include="draw.h" />
     <ClInclude Include="load.h" />
     <ClInclude Include="draw2D.h" />
+    <ClInclude Include="ui3D.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="geometry.cpp" />
@@ -16,6 +17,7 @@
     <ClCompile Include="draw.cpp" />
     <ClCompile Include="load.cpp" />
     <ClCompile Include="draw2D.cpp" />
+    <ClCompile Include="ui3D.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
