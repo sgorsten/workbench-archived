@@ -22,12 +22,22 @@ bool widget_id::is_parent_of(const widget_id & r, int id) const
     return values[r.values.size()] == id;
 }
 
-gui::gui(sprite_library & sprites) : sprites(sprites), in({})
+gui::gui() : in({})
 {
     std::vector<int> codepoints;
     for(int i=0xf000; i<=0xf295; ++i) codepoints.push_back(i);
     sprites.default_font.load_glyphs("fontawesome-webfont.ttf", 14, codepoints);
     sprites.sheet.prepare_texture();
+}
+
+void gui::begin_frame(const int2 & window_size, const input_event & e)
+{
+    buffer.begin_frame(sprites, window_size);
+    icon = cursor_icon::arrow;
+    in = e;
+    clip_event = clipboard_event::none;
+    clipboard.clear();
+    current_id = {};
 }
 
 bool gui::is_cursor_over(const rect & r) const
@@ -67,51 +77,6 @@ bool gui::check_release(int id)
         return true;
     }
     return false;
-}
-
-void gui::begin_frame(const int2 & window_size)
-{
-    this->window_size = window_size;
-    buffer.begin_frame(sprites, window_size);
-    clip_event = clipboard_event::none;
-    clipboard.clear();
-}
-void gui::end_frame() { buffer.end_frame(); }
-void gui::begin_overlay() { buffer.begin_overlay(); }
-void gui::end_overlay() { buffer.end_overlay(); }
-void gui::begin_scissor(const rect & r) { buffer.begin_scissor(r); }
-void gui::end_scissor() { buffer.end_scissor(); }
-
-void draw_rect(gui & g, const rect & r, const float4 & color) { draw_rect(g, r, color, color); }
-void draw_rect(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
-{
-    g.buffer.draw_rect(r, top_color);
-}
-
-void draw_rounded_rect_top(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
-{
-    g.buffer.draw_partial_rounded_rect(r, r.height(), top_color, 1, 1, 0, 0);
-}
-
-void draw_rounded_rect_bottom(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color)
-{
-    g.buffer.draw_partial_rounded_rect(r, r.height(), top_color, 0, 0, 1, 1);
-}
-
-void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color) { draw_rounded_rect(g, r, radius, color, color); }
-void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & top_color, const float4 & bottom_color)
-{
-    g.buffer.draw_rounded_rect(r, radius, top_color);
-}
-
-void draw_text(gui & g, int2 p, const float4 & c, const std::string & text)
-{     
-    g.buffer.draw_text(p, text, c);
-}
-
-void draw_shadowed_text(gui & g, int2 p, const float4 & c, const std::string & text)
-{
-    g.buffer.draw_shadowed_text(p, text, c);
 }
 
 static void prev_char(const std::string & text, std::string::size_type & pos) { pos = utf8::prev(text.data() + pos) - text.data(); }
@@ -241,17 +206,17 @@ bool edit(gui & g, int id, const rect & r, std::string & text)
     }
     
     const rect tr = {r.x0+5, r.y0+2, r.x1-5, r.y1-2};
-    draw_rounded_rect(g, r, 4, {1,1,1,1});
+    g.draw_rounded_rect(r, 4, {1,1,1,1});
     if(g.is_focused(id))
     {
         auto lo = std::min(g.text_cursor, g.text_mark), hi = std::max(g.text_cursor, g.text_mark);
-        draw_rect(g, {tr.x0 + g.sprites.default_font.get_text_width(text.substr(0, lo)), tr.y0, tr.x0 + g.sprites.default_font.get_text_width(text.substr(0, hi)), tr.y1}, {1,1,0,1}, {1,1,0,1});
+        g.draw_rect({tr.x0 + g.sprites.default_font.get_text_width(text.substr(0, lo)), tr.y0, tr.x0 + g.sprites.default_font.get_text_width(text.substr(0, hi)), tr.y1}, {1,1,0,1});
     }
-    draw_text(g, {tr.x0, tr.y0}, {0,0,0,1}, text);
+    g.draw_text({tr.x0, tr.y0}, text, {0,0,0,1});
     if(g.is_focused(id))
     {
         int w = g.sprites.default_font.get_text_width(text.substr(0, g.text_cursor));
-        draw_rect(g, {tr.x0+w, tr.y0, tr.x0+w+1, tr.y1}, {0,0,0,1});
+        g.draw_rect({tr.x0+w, tr.y0, tr.x0+w+1, tr.y1}, {0,0,0,1});
     }
     return changed;
 }
@@ -292,17 +257,14 @@ rect tabbed_frame(gui & g, rect r, const std::string & caption)
 {
     const int cap_width = g.sprites.default_font.get_text_width(caption)+24, cap_height = g.sprites.default_font.line_height + 4;
 
-    draw_rounded_rect_top(g, {r.x0, r.y0, r.x0 + cap_width, r.y0 + 10}, frame_color, frame_color);
-    draw_rect(g, {r.x0, r.y0 + 10, r.x0 + cap_width, r.y0 + cap_height}, frame_color);
-    draw_rect(g, {r.x0, r.y0 + cap_height, r.x1, r.y0 + cap_height + 1}, frame_color);
-    draw_rect(g, {r.x0, r.y0 + cap_height + 1, r.x0 + 1, r.y1 - 1}, frame_color);
-    draw_rect(g, {r.x1 - 1, r.y0 + cap_height + 1, r.x1, r.y1 - 1}, frame_color);
-    draw_rect(g, {r.x0, r.y1 - 1, r.x1, r.y1}, frame_color);
+    g.draw_partial_rounded_rect({r.x0, r.y0, r.x0 + cap_width, r.y0 + cap_height}, 10, frame_color, true, true, false, false);
+    g.draw_rect({r.x0, r.y0 + cap_height, r.x1, r.y0 + cap_height + 1}, frame_color);
+    g.draw_rect({r.x0, r.y0 + cap_height + 1, r.x0 + 1, r.y1 - 1}, frame_color);
+    g.draw_rect({r.x1 - 1, r.y0 + cap_height + 1, r.x1, r.y1 - 1}, frame_color);
+    g.draw_rect({r.x0, r.y1 - 1, r.x1, r.y1}, frame_color);
 
-    draw_rounded_rect_top(g, {r.x0 + 1, r.y0 + 1, r.x0 + cap_width - 1, r.y0 + 10}, cap_color, cap_color);
-    draw_rect(g, {r.x0 + 1, r.y0 + 10, r.x0 + cap_width - 1, r.y0 + cap_height + 1}, cap_color);
-
-    draw_shadowed_text(g, {r.x0 + 11, r.y0 + 3}, {1,1,1,1}, caption);
+    g.draw_partial_rounded_rect({r.x0+1, r.y0+1, r.x0 + cap_width - 1, r.y0 + cap_height + 1}, 9, cap_color, true, true, false, false);
+    g.draw_shadowed_text({r.x0 + 11, r.y0 + 3}, caption, {1,1,1,1});
 
     return {r.x0 + 1, r.y0 + cap_height + 1, r.x1 - 1, r.y1 - 1};
 }
@@ -318,8 +280,8 @@ rect vscroll_panel(gui & g, int id, const rect & r, int client_height, int & off
     const rect tab = {r.x1-scrollbar_width, r.y0 + offset * r.height() / client_height, r.x1, r.y0 + (offset + r.height()) * r.height() / client_height};
     g.check_click(id, tab);
 
-    draw_rect(g, {r.x1-scrollbar_width, r.y0, r.x1, r.y1}, {0.5f,0.5f,0.5f,1}); // Track
-    draw_rounded_rect(g, tab, (scrollbar_width-2)/2, {0.8f,0.8f,0.8f,1}); // Tab
+    g.draw_rect({r.x1-scrollbar_width, r.y0, r.x1, r.y1}, {0.5f,0.5f,0.5f,1}); // Track
+    g.draw_rounded_rect(tab, (scrollbar_width-2)/2, {0.8f,0.8f,0.8f,1}); // Tab
     return {r.x0, r.y0, r.x1-scrollbar_width, r.y1};
 }
 
@@ -353,7 +315,7 @@ std::pair<rect, rect> vsplitter(gui & g, int id, const rect & r, int & split)
 
 void begin_menu(gui & g, int id, const rect & r)
 {
-    draw_rect(g, r, cap_color);
+    g.draw_rect(r, cap_color);
 
     g.menu_stack.clear();
     g.menu_stack.push_back({{r.x0+10, r.y0, r.x0+10, r.y1}, true});
@@ -385,14 +347,14 @@ void begin_popup(gui & g, int id, const std::string & caption)
 
     if(f.open)
     {
-        if(g.is_cursor_over(item)) draw_rect(g, item, {0.5f,0.5f,0,1});
+        if(g.is_cursor_over(item)) g.draw_rect(item, {0.5f,0.5f,0,1});
 
         if(g.menu_stack.size() > 1)
         {
-            draw_shadowed_text(g, {item.x0+20, item.y0}, {1,1,1,1}, caption);
-            draw_shadowed_text(g, {item.x0 + 180, item.y0}, {1,1,1,1}, utf8::units(0xf0da).data());
+            g.draw_shadowed_text({item.x0+20, item.y0}, caption, {1,1,1,1});
+            g.draw_shadowed_text({item.x0 + 180, item.y0}, std::string(utf8::units(0xf0da).data()), {1,1,1,1});
         }
-        else draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, caption);
+        else g.draw_shadowed_text( {item.x0, item.y0}, caption, {1,1,1,1});
 
         if(g.check_click(id, item))
         {
@@ -412,7 +374,7 @@ void menu_seperator(gui & g)
 {
     if(g.menu_stack.size() < 2) return;
     auto & f = g.menu_stack.back();
-    if(f.open) draw_rect(g, {f.r.x0 + 4, f.r.y1 + 1, f.r.x0 + 196, f.r.y1 + 2}, {0.5,0.5,0.5,1});
+    if(f.open) g.draw_rect({f.r.x0 + 4, f.r.y1 + 1, f.r.x0 + 196, f.r.y1 + 2}, {0.5,0.5,0.5,1});
     f.r.y1 += 6;
 }
 
@@ -425,9 +387,9 @@ bool menu_item(gui & g, const std::string & caption, int mods, int key, uint32_t
 
     if(f.open)
     {
-        if(g.is_cursor_over(item)) draw_rect(g, item, {0.5f,0.5f,0,1});
-        if(icon) draw_shadowed_text(g, {item.x0, item.y0}, {1,1,1,1}, utf8::units(icon).data());
-        draw_shadowed_text(g, {item.x0+20, item.y0}, {1,1,1,1}, caption);
+        if(g.is_cursor_over(item)) g.draw_rect(item, {0.5f,0.5f,0,1});
+        if(icon) g.draw_shadowed_text({item.x0, item.y0}, std::string(utf8::units(icon).data()), {1,1,1,1});
+        g.draw_shadowed_text({item.x0+20, item.y0}, caption, {1,1,1,1});
 
         if(key)
         {
@@ -474,7 +436,7 @@ bool menu_item(gui & g, const std::string & caption, int mods, int key, uint32_t
             case GLFW_KEY_PAUSE:            ss << "Pause";       break;
             default: throw std::logic_error("unsupported hotkey");
             }
-            draw_shadowed_text(g, {item.x0 + 100, item.y0}, {1,1,1,1}, ss.str());
+            g.draw_shadowed_text({item.x0 + 100, item.y0}, ss.str(), {1,1,1,1});
         }
         if(g.is_cursor_over(item) && g.in.type == input::mouse_down && g.in.button == GLFW_MOUSE_BUTTON_LEFT)
         {
@@ -494,8 +456,8 @@ void end_popup(gui & g)
     if(g.menu_stack.back().open)
     {
         const auto & r = g.menu_stack.back().r;
-        draw_rect(g, r, {0.5f,0.5f,0.5f,1});
-        draw_rect(g, {r.x0+1, r.y0+1, r.x1-1, r.y1-1}, {0.2f,0.2f,0.2f,1});
+        g.draw_rect(r, {0.5f,0.5f,0.5f,1});
+        g.draw_rect({r.x0+1, r.y0+1, r.x1-1, r.y1-1}, {0.2f,0.2f,0.2f,1});
     }
     g.end_overlay();
     auto clicked = g.menu_stack.back().clicked;

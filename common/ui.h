@@ -8,7 +8,7 @@
 #include "input.h"
 
 enum class cursor_icon { arrow, ibeam, hresize, vresize };
-enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy, rotate_yz, rotate_zx, rotate_xy };
+enum class clipboard_event { none, cut, copy, paste };
 struct menu_stack_frame { rect r; bool open, clicked; };
 
 class widget_id
@@ -21,32 +21,52 @@ public:
     void pop() { values.pop_back(); }
 };
 
-enum class clipboard_event { none, cut, copy, paste };
-
 struct gui
 {
-    const sprite_library & sprites;
-    draw_buffer_2d buffer;
+    // Output state
+    sprite_library sprites;                         // Permanent repository of sprites, including font glyphs, icons, and antialiased shapes
+    draw_buffer_2d buffer;                          // Buffer which receives 2D drawing commands, reset to empty on begin_frame(...)
+    cursor_icon icon;                               // The current icon to display for the cursor, defaults to cursor_icon::arrow on begin_frame(...)
 
-    int2 window_size;               // Size in pixels of the current window
-    input_event in;
-    clipboard_event clip_event;
-    std::string clipboard;
+    // Input state
+    input_event in;                                 // Any event which occurs during this frame, may be none, but cursor and mods are always available
+    clipboard_event clip_event;                     // Was a clipboard event requested during this frame?
+    std::string clipboard;                          // Buffer used to receive or send information to the clipboard
 
-    cursor_icon icon;
+    // Focus state
+    widget_id current_id;                           // The prefix of the ID of the current widget, managed by begin_children(...)/end_children(...) calls
+    widget_id pressed_id;                           // The ID of the widget which has been clicked and is currently being held
+    widget_id focused_id;                           // The ID of the last focusable widget which was clicked on
 
-    widget_id current_id;
-    widget_id pressed_id;
-    widget_id focused_id;
-    float2 click_offset;
+    // Widget state
+    float2 click_offset;                            // Offset from top-left of widget to clicked point, used for sliders, scrollbars, and draggables
+    std::vector<menu_stack_frame> menu_stack;       // Information about expanded popup menus
+    std::string::size_type text_cursor, text_mark;  // The bounds of the current selection in a text-edit widget
 
-    std::string::size_type text_cursor, text_mark;
-    std::vector<menu_stack_frame> menu_stack;
+    gui();
 
-    gui(sprite_library & sprites);
+    // Scope API
+    void begin_frame(const int2 & window_size, const input_event & e);
+    void end_frame() { buffer.end_frame(); }
+    void begin_overlay() { buffer.begin_overlay(); }
+    void end_overlay() { buffer.end_overlay(); }
+    void begin_transform(const transform_2d & t) { buffer.begin_transform(t); }
+    void end_transform() { buffer.end_transform(); }
+    void begin_scissor(const rect & r) { buffer.begin_scissor(r); }
+    void end_scissor() { buffer.end_scissor(); }
 
+    // Output API
+    void draw_text(int2 p, utf8::string_view text, const float4 & color) { buffer.draw_text(p, text, color); }
+    void draw_shadowed_text(int2 p, utf8::string_view text, const float4 & color) { buffer.draw_shadowed_text(p, text, color); }
+    void draw_circle(const int2 & center, int radius, const float4 & color) { buffer.draw_circle(center, radius, color); }
+    void draw_rect(const rect & r, const float4 & color) { buffer.draw_rect(r, color); }
+    void draw_rounded_rect(const rect & r, int radius, const float4 & color) { buffer.draw_rounded_rect(r, radius, color); }
+    void draw_partial_rounded_rect(rect r, int radius, const float4 & color, bool tl, bool tr, bool bl, bool br) { buffer.draw_partial_rounded_rect(r, radius, color, tl, tr, bl, br); }
+    void draw_line(const float2 & p0, const float2 & p1, int width, const float4 & color) { buffer.draw_line(p0, p1, width, color); }
+    void draw_bezier_curve(const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color) { buffer.draw_bezier_curve(p0, p1, p2, p3, width, color); }
+
+    // Input API
     float2 get_cursor() const { return buffer.detransform_point(in.cursor); }
-
     bool is_control_held() const { return (in.mods & GLFW_MOD_CONTROL) != 0; }
     bool is_shift_held() const { return (in.mods & GLFW_MOD_SHIFT) != 0; }
 
@@ -63,25 +83,7 @@ struct gui
     bool check_click(int id, const rect & r); // Returns true if the item was clicked during this frame
     bool check_pressed(int id); // Returns true if the item with the specified ID was clicked and has not yet been released
     bool check_release(int id); // Returns true if the item with the specified ID was released during this frame
-
-    // API for rendering 2D glyphs
-    void begin_frame(const int2 & window_size);
-    void end_frame();
-    void begin_overlay();
-    void end_overlay();
-    void begin_scissor(const rect & r);
-    void end_scissor();
 };
-
-// Basic 2D gui output
-void draw_rect(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color);
-void draw_rect(gui & g, const rect & r, const float4 & color);
-void draw_rounded_rect_top(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color);
-void draw_rounded_rect_bottom(gui & g, const rect & r, const float4 & top_color, const float4 & bottom_color);
-void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & top_color, const float4 & bottom_color);
-void draw_rounded_rect(gui & g, const rect & r, int radius, const float4 & color);
-void draw_text(gui & g, int2 p, const float4 & c, const std::string & text);
-void draw_shadowed_text(gui & g, int2 p, const float4 & c, const std::string & text);
 
 // 2D gui widgets
 bool edit(gui & g, int id, const rect & r, std::string & text);

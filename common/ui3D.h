@@ -27,6 +27,8 @@ struct gizmo_resources
     std::shared_ptr<const gfx::mesh> meshes[9];
 };
 
+enum class gizmo_mode { none, translate_x, translate_y, translate_z, translate_yz, translate_zx, translate_xy, rotate_yz, rotate_zx, rotate_xy };
+
 struct gui3D
 {
     gui & g;

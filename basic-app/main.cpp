@@ -172,13 +172,13 @@ struct point_light : public scene_object
         int y0 = r.y0 + 4 - offset;
 
         const int line_height = g.sprites.default_font.line_height + 4, mid = (r.x0 + r.x1) / 2;
-        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Name");
+        g.draw_shadowed_text({r.x0 + 4, y0 + 2}, "Name", {1,1,1,1});
         edit(g, 1, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
         y0 += line_height + 4;
-        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
+        g.draw_shadowed_text({r.x0 + 4, y0 + 2}, "Position", {1,1,1,1});
         edit(g, 2, {mid + 2, y0, r.x1 - 4, y0 + line_height}, p.position);
         y0 += line_height + 4;
-        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Color");
+        g.draw_shadowed_text({r.x0 + 4, y0 + 2}, "Color", {1,1,1,1});
         edit(g, 3, {mid + 2, y0, r.x1 - 4, y0 + line_height}, color);
         y0 += line_height + 4;    
     }
@@ -212,10 +212,10 @@ struct static_mesh : public scene_object
 
         int id = 0;
         const int line_height = g.sprites.default_font.line_height + 4, mid = (r.x0 + r.x1) / 2;
-        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Name");
+        g.draw_shadowed_text({r.x0 + 4, y0 + 2}, "Name", {1,1,1,1});
         edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, name);
         y0 += line_height + 4;
-        draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,1,1}, "Position");
+        g.draw_shadowed_text({r.x0 + 4, y0 + 2}, "Position", {1,1,1,1});
         edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, p.position);
         y0 += line_height + 4;
         
@@ -223,7 +223,7 @@ struct static_mesh : public scene_object
         {
             if(u.data_type->gl_type == GL_FLOAT_VEC3)
             {
-                draw_shadowed_text(g, {r.x0 + 4, y0 + 2}, {1,1,0.5f,1}, u.name);
+                g.draw_shadowed_text({r.x0 + 4, y0 + 2}, u.name, {1,1,0.5f,1});
                 edit(g, ++id, {mid + 2, y0, r.x1 - 4, y0 + line_height}, (float3 &)mat.get_buffer_data()[u.location]);
                 y0 += line_height + 4;
             }
@@ -274,7 +274,7 @@ void object_list_ui(gui3D & g, int id, rect r, const std::vector<scene_object *>
         }
 
         bool selected = selection.find(obj) != end(selection);
-        draw_shadowed_text(g.g, {list_entry.x0, list_entry.y0}, selected ? float4(1,1,0,1) : float4(1,1,1,1), obj->name);
+        g.g.draw_shadowed_text({list_entry.x0, list_entry.y0}, obj->name, selected ? float4(1,1,0,1) : float4(1,1,1,1));
         y0 += g.g.sprites.default_font.line_height + 4;
     }
     g.g.end_scissor();
@@ -361,9 +361,7 @@ std::shared_ptr<gfx::mesh> make_draw_mesh(std::shared_ptr<gfx::context> ctx, con
 
 int main(int argc, char * argv[]) try
 {
-    sprite_library sprites;
-
-    gui g(sprites);
+    gui g;
     gui3D g3(g);
     g3.cam.yfov = 1.0f;
     g3.cam.near_clip = 0.1f;
@@ -405,7 +403,7 @@ int main(int argc, char * argv[]) try
     std::set<scene_object *> selection;
     
     gui_resources gui_res;
-    gui_res.init_resources(ctx, sprites.sheet);
+    gui_res.init_resources(ctx, g.sprites.sheet);
 
     g3.gizmo_res.program = gfx::link_program(ctx, {compile_shader(ctx, GL_VERTEX_SHADER, diffuse_vert_shader_source), compile_shader(ctx, GL_FRAGMENT_SHADER, diffuse_frag_shader_source)});
     for(int i=0; i<9; ++i) g3.gizmo_res.meshes[i] = make_draw_mesh(ctx, g3.gizmo_res.geomeshes[i]);
@@ -426,26 +424,23 @@ int main(int argc, char * argv[]) try
     double t0 = glfwGetTime();
     while(!glfwWindowShouldClose(win))
     {
-        g.icon = cursor_icon::arrow;
         glfwPollEvents();
 
+        int2 window_size, fb_size;
+        glfwGetFramebufferSize(win, &fb_size.x, &fb_size.y);
+        glfwGetWindowSize(win, &window_size.x, &window_size.y);
         if(events.empty()) emit_empty_event(win);
-        g.in = events.front();
-        events.erase(begin(events));
-
-        int fw, fh, w, h;
-        glfwGetFramebufferSize(win, &fw, &fh);
-        glfwGetWindowSize(win, &w, &h);
+        g.begin_frame(window_size, events.front());
+        events.erase(begin(events));        
 
         const double t1 = glfwGetTime();
         g3.timestep = static_cast<float>(t1-t0);
         t0 = t1;
-
-        g.begin_frame({w, h});
+        
         g3.begin_frame();
 
         // Experimental support for a menu bar
-        begin_menu(g, 1, {0, 0, w, 20});
+        begin_menu(g, 1, {0, 0, window_size.x, 20});
         {
             begin_popup(g, 1, "File");
             {
@@ -492,7 +487,7 @@ int main(int argc, char * argv[]) try
         }
         end_menu(g);
 
-        auto s = hsplitter(g, 2, {0, 21, w, h}, split1);
+        auto s = hsplitter(g, 2, {0, 21, window_size.x, window_size.y}, split1);
         viewport_ui(g3, 3, s.first, objects, selection);
         s = vsplitter(g, 4, s.second, split2);
         object_list_ui(g3, 5, s.first, objects, selection, offset0);
@@ -524,7 +519,7 @@ int main(int argc, char * argv[]) try
         gui_res.render_gui(g);
 
         glfwMakeContextCurrent(win);
-        glViewport(0, 0, fw, fh);
+        glViewport(0, 0, fb_size.x, fb_size.y);
         glClearColor(0.1f, 0.1f, 0.1f, 1);
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -537,7 +532,7 @@ int main(int argc, char * argv[]) try
         glDisable(GL_CULL_FACE);
         glDisable(GL_DEPTH_TEST);
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        the_renderer.draw_scene(win, {0, 0, fw, fh}, nullptr, nullptr, gui_res.list);
+        the_renderer.draw_scene(win, {0, 0, fb_size.x, fb_size.y}, nullptr, nullptr, gui_res.list);
 
         glfwSwapBuffers(win);
     }

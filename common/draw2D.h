@@ -60,7 +60,6 @@ namespace utf8
     struct string_view
     {
         const char * first, * last;
-        string_view() : first(), last() {}
         string_view(const std::string & s) : first(s.data()), last(s.data() + s.size()) {}
         template<int N> string_view(const char (& s)[N]) : first(s), last(s + N) {}
         codepoint_iterator begin() const { return {first}; }
@@ -142,6 +141,7 @@ public:
     void begin_scissor(const rect & r);
     void end_scissor();
 
+    void draw_quad(const vertex & v0, const vertex & v1, const vertex & v2, const vertex & v3);
     void draw_line(const float2 & p0, const float2 & p1, int width, const float4 & color);
     void draw_bezier_curve(const float2 & p0, const float2 & p1, const float2 & p2, const float2 & p3, int width, const float4 & color);
 
@@ -154,7 +154,7 @@ public:
     void draw_text(int2 p, utf8::string_view text, const float4 & color);
     void draw_shadowed_text(int2 p, utf8::string_view text, const float4 & color);
 private:
-    void draw_quad(const vertex & v0, const vertex & v1, const vertex & v2, const vertex & v3);
+    
 
     struct list { size_t level,first,last; };
     const sprite_library * library;

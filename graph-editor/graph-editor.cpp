@@ -28,18 +28,18 @@ struct node_type
 
     void draw(gui & g, const rect & r) const
     {
-        g.buffer.draw_partial_rounded_rect({r.x0, r.y0, r.x1, r.y0+title_height}, corner_radius, {0.5f,0.5f,0.5f,1}, true, true, false, false);
-        g.buffer.draw_partial_rounded_rect({r.x0, r.y0+title_height, r.x1, r.y1}, corner_radius, {0.3f,0.3f,0.3f,1}, false, false, true, true);
-        g.buffer.begin_scissor({r.x0, r.y0, r.x1, r.y0+title_height});
-        g.buffer.draw_shadowed_text({r.x0+8, r.y0+6}, caption, {1,1,1,1});
-        g.buffer.end_scissor();
+        g.draw_partial_rounded_rect({r.x0, r.y0, r.x1, r.y0+title_height}, corner_radius, {0.5f,0.5f,0.5f,1}, true, true, false, false);
+        g.draw_partial_rounded_rect({r.x0, r.y0+title_height, r.x1, r.y1}, corner_radius, {0.3f,0.3f,0.3f,1}, false, false, true, true);
+        g.begin_scissor({r.x0, r.y0, r.x1, r.y0+title_height});
+        g.draw_shadowed_text({r.x0+8, r.y0+6}, caption, {1,1,1,1});
+        g.end_scissor();
 
         for(size_t i=0; i<inputs.size(); ++i)
         {
             const auto loc = get_input_location(r,i);
-            g.buffer.draw_circle(loc, 8, {1,1,1,1});
-            g.buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
-            g.buffer.draw_shadowed_text(loc + int2(12, -g.buffer.get_library().default_font.line_height/2), inputs[i], {1,1,1,1});
+            g.draw_circle(loc, 8, {1,1,1,1});
+            g.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
+            g.draw_shadowed_text(loc + int2(12, -g.buffer.get_library().default_font.line_height/2), inputs[i], {1,1,1,1});
 
             if(g.is_cursor_over({loc.x-8, loc.y-8, loc.x+8, loc.y+8}))
             {
@@ -49,9 +49,9 @@ struct node_type
         for(size_t i=0; i<outputs.size(); ++i)
         {
             const auto loc = get_output_location(r,i);
-            g.buffer.draw_circle(loc, 8, {1,1,1,1});
-            g.buffer.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
-            g.buffer.draw_shadowed_text(loc + int2(-12 - g.buffer.get_library().default_font.get_text_width(outputs[i]), -g.buffer.get_library().default_font.line_height/2), outputs[i], {1,1,1,1});
+            g.draw_circle(loc, 8, {1,1,1,1});
+            g.draw_circle(loc, 6, {0.2f,0.2f,0.2f,1});
+            g.draw_shadowed_text(loc + int2(-12 - g.buffer.get_library().default_font.get_text_width(outputs[i]), -g.buffer.get_library().default_font.line_height/2), outputs[i], {1,1,1,1});
 
             if(g.is_cursor_over({loc.x-8, loc.y-8, loc.x+8, loc.y+8}))
             {
@@ -110,8 +110,7 @@ void render_draw_buffer_opengl(const draw_buffer_2d & buffer, GLuint sprite_text
 
 int main()
 {
-    sprite_library sprites;
-    gui g(sprites);
+    gui g;
 
     glfwInit();
     auto win = glfwCreateWindow(1280, 720, "Draw2D Test", nullptr, nullptr);
@@ -119,7 +118,7 @@ int main()
     install_input_callbacks(win, events);
     glfwMakeContextCurrent(win);
 
-    GLuint tex = make_sprite_texture_opengl(sprites.sheet);
+    GLuint tex = make_sprite_texture_opengl(g.sprites.sheet);
 
     const node_type type = {"Graph Node with a long title that will clip the edge of the node", {"Input 1", "Input 2"}, {"Output 1", "Output 2", "Output 3"}};
     node nodes[] = {
@@ -138,8 +137,10 @@ int main()
         g.icon = cursor_icon::arrow;
         glfwPollEvents();
 
+        int2 window_size;
+        glfwGetWindowSize(win, &window_size.x, &window_size.y);
         if(events.empty()) emit_empty_event(win);
-        g.in = events.front();
+        g.begin_frame(window_size, events.front());
         events.erase(begin(events));
 
         switch(g.in.type)
@@ -161,13 +162,10 @@ int main()
             break;
         }
 
-        int2 window_size;
-        glfwGetWindowSize(win, &window_size.x, &window_size.y);
-        g.begin_frame(window_size);
-        g.buffer.begin_transform(cam);    
+        g.begin_transform(cam);    
         for(int i=0; i<2; ++i) nodes[i].on_gui(g, i+1);
         for(auto & e : edges) e.draw(g.buffer);
-        g.buffer.end_transform();
+        g.end_transform();
 
         g.end_frame();
 
