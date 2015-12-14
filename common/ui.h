@@ -70,8 +70,9 @@ struct gui
     bool is_mouse_down(int button) const { return in.type == input::mouse_down && in.button == button; }
     bool is_mouse_up(int button) const { return in.type == input::mouse_up && in.button == button; }
     bool is_key_down(int key, int mods = 0) const { return in.type == input::key_down && in.key == key && in.mods == mods; }
-    bool is_control_held() const { return (in.mods & GLFW_MOD_CONTROL) != 0; }
     bool is_shift_held() const { return (in.mods & GLFW_MOD_SHIFT) != 0; }
+    bool is_control_held() const { return (in.mods & GLFW_MOD_CONTROL) != 0; }
+    bool is_alt_held() const { return (in.mods & GLFW_MOD_ALT) != 0; }
     void consume_input() { in = {input::none, in.cursor, in.mods}; }
 
     // API for determining clicked status
