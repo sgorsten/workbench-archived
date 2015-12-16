@@ -204,6 +204,7 @@ struct rect
     int height() const { return y1 - y0; }
     linalg::aliases::int2 dims() const { return {width(), height()}; }
     float aspect_ratio() const { return (float)width()/height(); }
+    template<class T> bool contains(const linalg::vec<T,2> & point) const { return point.x >= x0 && point.y >= y0 && point.x < x1 && point.y < y1; }
 };
 
 #endif

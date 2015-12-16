@@ -64,14 +64,33 @@ static rect get_input_rect (const gui & g, const node & n, size_t index) { auto 
 static rect get_output_rect(const gui & g, const node & n, size_t index) { auto loc = get_output_location(g,n,index); return {loc.x-8, loc.y-8, loc.x+8, loc.y+8}; }
 
 const node_type types[] = {
-    {"Add", {"A", "B"}, {"A+B"}},
-    {"Subtract", {"A", "B"}, {"A-B"}},
-    {"Multiply", {"A", "B"}, {"A*B"}},
-    {"Divide", {"A", "B"}, {"A/B"}},
-    {"Break Float3", {""}, {"X", "Y", "Z"}},
-    {"Make Float3", {"X", "Y", "Z"}, {""}},
-    {"Normalize Vector", {""}, {""}},
+    {"Add", {"A", "B"}, {"A + B"}},
+    {"Subtract", {"A", "B"}, {"A - B"}},
+    {"Multiply", {"A", "B"}, {"A * B"}},
+    {"Divide", {"A", "B"}, {"A / B"}},
+    {"Break Float3", {"(X, Y, Z)"}, {"X", "Y", "Z"}},
+    {"Make Float3", {"X", "Y", "Z"}, {"(X, Y, Z)"}},
+    {"Normalize Vector", {"V"}, {"V / |V|"}},
 };
+
+bool is_subsequence(const std::string & seq, const std::string & sub)
+{
+    auto it = begin(seq);
+    for(char ch : sub)
+    {
+        bool match = false;
+        for(; it != end(seq); ++it)
+        {
+            if(toupper(ch) == toupper(*it))
+            {
+                match = true;
+                break;
+            }
+        }
+        if(!match) return false;
+    }
+    return true;
+}
 
 struct graph
 {
@@ -80,6 +99,9 @@ struct graph
 
     node * link_input_node, * link_output_node;
     size_t link_input_pin, link_output_pin;
+
+    int2 popup_loc;
+    std::string node_filter;
 
     graph() { reset_link(); }
 
@@ -93,10 +115,56 @@ struct graph
     void on_gui(gui & g)
     {
         const int ID_NEW_WIRE = 1, ID_POPUP_MENU = 2, ID_DRAG_GRAPH = 3;
-
         int id = 4;
-        g.begin_transform(view);
 
+        if(g.is_mouse_down(GLFW_MOUSE_BUTTON_RIGHT))
+        {
+            g.begin_children(ID_POPUP_MENU);
+            g.set_pressed(1);
+            g.focused_id = g.pressed_id;
+            g.pressed_id = {};
+            popup_loc = int2(g.in.cursor);            
+            node_filter = "";
+        }
+
+        if(g.is_focused(ID_POPUP_MENU) || g.is_child_focused(ID_POPUP_MENU))
+        {
+            int w = 0, h = g.sprites.default_font.line_height + 4;
+            for(auto & type : types)
+            {
+                w = std::max(w, g.sprites.default_font.get_text_width(type.caption));
+                if(!is_subsequence(type.caption, node_filter)) continue;
+                h += g.sprites.default_font.line_height + 4;
+            }            
+
+            auto loc = popup_loc;
+            const rect overlay = {loc.x, loc.y, loc.x + w, loc.y + h}; 
+            g.begin_children(ID_POPUP_MENU);
+            g.begin_overlay();            
+            g.draw_rect(overlay, {0.5f,0.5f,0.5f,1});
+            edit(g, 1, {loc.x, loc.y, loc.x + w, loc.y + g.sprites.default_font.line_height + 4}, node_filter);
+            loc.y += g.sprites.default_font.line_height + 8;
+            for(auto & type : types)
+            {
+                if(!is_subsequence(type.caption, node_filter)) continue;
+
+                rect r = {loc.x, loc.y, loc.x + w, loc.y + g.sprites.default_font.line_height};
+                if(g.is_mouse_down(GLFW_MOUSE_BUTTON_LEFT) && g.is_cursor_over(r))
+                {
+                    nodes.push_back(new node{&type, int2(view.detransform_point(float2(popup_loc)))});
+                    g.focused_id = {};
+                }
+                g.draw_shadowed_text(loc, type.caption, {1,1,1,1});
+                loc.y += g.sprites.default_font.line_height + 4;
+            }
+            g.end_overlay();
+            g.end_children();
+            if(overlay.contains(g.in.cursor)) g.consume_input();
+            else if(g.in.type == input::mouse_down) g.focused_id = {};
+        }
+
+        g.begin_transform(view);
+        
         // Draw wires
         for(auto & n : nodes)
         {
@@ -221,39 +289,6 @@ struct graph
             g.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
 
             if(g.check_release(ID_NEW_WIRE)) reset_link();
-        }
-
-        if(g.is_mouse_down(GLFW_MOUSE_BUTTON_RIGHT))
-        {
-            g.set_pressed(ID_POPUP_MENU);
-            g.click_offset = g.in.cursor;
-        }
-
-        if(g.is_pressed(ID_POPUP_MENU))
-        {
-            int w = 0, h = -4;
-            for(auto & type : types)
-            {
-                w = std::max(w, g.sprites.default_font.get_text_width(type.caption));
-                h += g.sprites.default_font.line_height + 4;
-            }            
-
-            auto loc = int2(g.click_offset);
-
-            g.begin_overlay();
-            g.draw_rect({loc.x, loc.y, loc.x + w, loc.y + h}, {0.5f,0.5f,0.5f,1});
-            for(auto & type : types)
-            {
-                rect r = {loc.x, loc.y, loc.x + 100, loc.y + g.sprites.default_font.line_height};
-                if(g.check_click(ID_POPUP_MENU, r))
-                {
-                    nodes.push_back(new node{&type, loc});
-                    g.pressed_id = {};
-                }
-                g.draw_shadowed_text(loc, type.caption, {1,1,1,1});
-                loc.y += g.sprites.default_font.line_height + 4;
-            }
-            g.end_overlay();
         }
 
         // Do the scrollable, zoomable background
