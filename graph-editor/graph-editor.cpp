@@ -68,8 +68,12 @@ const node_type types[] = {
     {"Subtract", {"A", "B"}, {"A - B"}},
     {"Multiply", {"A", "B"}, {"A * B"}},
     {"Divide", {"A", "B"}, {"A / B"}},
-    {"Break Float3", {"(X, Y, Z)"}, {"X", "Y", "Z"}},
+    {"Make Float2", {"X", "Y"}, {"(X, Y)"}},
     {"Make Float3", {"X", "Y", "Z"}, {"(X, Y, Z)"}},
+    {"Make Float4", {"X", "Y", "Z", "W"}, {"(X, Y, Z, W)"}},
+    {"Break Float2", {"(X, Y)"}, {"X", "Y"}},
+    {"Break Float3", {"(X, Y, Z)"}, {"X", "Y", "Z"}},
+    {"Break Float4", {"(X, Y, Z, W)"}, {"X", "Y", "Z", "W"}},
     {"Normalize Vector", {"V"}, {"V / |V|"}},
 };
 
@@ -102,6 +106,7 @@ struct graph
 
     int2 popup_loc;
     std::string node_filter;
+    int node_scroll;
 
     graph() { reset_link(); }
 
@@ -110,16 +115,16 @@ struct graph
         link_input_node = link_output_node = nullptr;
     }
 
-    bool mr = false;
-
-    void on_gui(gui & g)
+    void draw_wire(gui & g, const float2 & p0, const float2 & p1) const
     {
-        const int ID_NEW_WIRE = 1, ID_POPUP_MENU = 2, ID_DRAG_GRAPH = 3;
-        int id = 4;
+        g.draw_bezier_curve(p0, float2(p0.x + abs(p1.x - p0.x)*0.7f, p0.y), float2(p1.x - abs(p1.x - p0.x)*0.7f, p1.y), p1, 2, {1,1,1,1});    
+    }
 
+    void new_node_popup(gui & g, int id)
+    {
         if(g.is_mouse_down(GLFW_MOUSE_BUTTON_RIGHT))
         {
-            g.begin_children(ID_POPUP_MENU);
+            g.begin_children(id);
             g.set_pressed(1);
             g.focused_id = g.pressed_id;
             g.pressed_id = {};
@@ -127,41 +132,60 @@ struct graph
             node_filter = "";
         }
 
-        if(g.is_focused(ID_POPUP_MENU) || g.is_child_focused(ID_POPUP_MENU))
+        if(g.is_focused(id) || g.is_child_focused(id))
         {
-            int w = 0, h = g.sprites.default_font.line_height + 4;
+            int w = 0;
+            int n = 0;
             for(auto & type : types)
             {
                 w = std::max(w, g.sprites.default_font.get_text_width(type.caption));
-                if(!is_subsequence(type.caption, node_filter)) continue;
-                h += g.sprites.default_font.line_height + 4;
-            }            
+                if(is_subsequence(type.caption, node_filter)) ++n;
+            }
 
             auto loc = popup_loc;
-            const rect overlay = {loc.x, loc.y, loc.x + w, loc.y + h}; 
-            g.begin_children(ID_POPUP_MENU);
-            g.begin_overlay();            
-            g.draw_rect(overlay, {0.5f,0.5f,0.5f,1});
-            edit(g, 1, {loc.x, loc.y, loc.x + w, loc.y + g.sprites.default_font.line_height + 4}, node_filter);
-            loc.y += g.sprites.default_font.line_height + 8;
+            const rect overlay = {loc.x, loc.y, loc.x + w + 30, loc.y + 200}; 
+            g.begin_children(id);
+            g.begin_overlay();      
+
+            g.draw_rect(overlay, {0.7f,0.7f,0.7f,1});
+            g.draw_rect({overlay.x0+1, overlay.y0+1, overlay.x1-1, overlay.y1-1}, {0.3f,0.3f,0.3f,1});
+            edit(g, 1, {overlay.x0+4, overlay.y0+4, overlay.x1-4, overlay.y0 + g.sprites.default_font.line_height + 8}, node_filter);
+
+            auto c = vscroll_panel(g, 2, {overlay.x0 + 1, overlay.y0 + g.sprites.default_font.line_height + 12, overlay.x1 - 1, overlay.y1 - 1}, (g.sprites.default_font.line_height+4) * n - 4, node_scroll);
+            
+            g.begin_scissor(c);
+            g.begin_transform(transform_2d::translation(float2(0, -node_scroll)));
+            int y = c.y0;
             for(auto & type : types)
             {
                 if(!is_subsequence(type.caption, node_filter)) continue;
 
-                rect r = {loc.x, loc.y, loc.x + w, loc.y + g.sprites.default_font.line_height};
-                if(g.is_mouse_down(GLFW_MOUSE_BUTTON_LEFT) && g.is_cursor_over(r))
+                rect r = {c.x0, y, c.x1, y + g.sprites.default_font.line_height};
+                if(g.check_click(3, r))
                 {
                     nodes.push_back(new node{&type, int2(view.detransform_point(float2(popup_loc)))});
                     g.focused_id = {};
                 }
-                g.draw_shadowed_text(loc, type.caption, {1,1,1,1});
-                loc.y += g.sprites.default_font.line_height + 4;
+                if(g.is_cursor_over(r)) g.draw_rect(r, {0.7f,0.7f,0.3f,1});
+                g.draw_shadowed_text({r.x0+4, r.y0}, type.caption, {1,1,1,1});                
+                y = r.y1 + 4;
             }
+            g.end_transform();
+            g.end_scissor();
+
             g.end_overlay();
             g.end_children();
             if(overlay.contains(g.in.cursor)) g.consume_input();
             else if(g.in.type == input::mouse_down) g.focused_id = {};
         }
+    }
+
+    void on_gui(gui & g)
+    {
+        const int ID_NEW_WIRE = 1, ID_POPUP_MENU = 2, ID_DRAG_GRAPH = 3;
+        int id = 4;
+
+        new_node_popup(g, ID_POPUP_MENU);
 
         g.begin_transform(view);
         
@@ -172,8 +196,7 @@ struct graph
             {
                 if(!n->input_edges[i].other) continue;
                 const auto p0 = float2(get_output_location(g, *n->input_edges[i].other, n->input_edges[i].pin)), p3 = float2(get_input_location(g, *n, i));
-                const auto p1 = float2(p0.x + abs(p3.x - p0.x)*0.7f, p0.y), p2 = float2(p3.x - abs(p3.x - p0.x)*0.7f, p3.y);
-                g.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
+                draw_wire(g, p0, p3);
             }
         }
 
@@ -272,7 +295,7 @@ struct graph
         // If the user is currently dragging a wire between two pins, draw it
         if(g.is_pressed(ID_NEW_WIRE))
         {
-            auto p0 = g.get_cursor(), p3 = p0;
+            auto p0 = g.get_cursor(), p1 = p0;
             if(link_output_node)
             {
                 auto loc = get_output_location(g, *link_output_node, link_output_pin);
@@ -283,10 +306,9 @@ struct graph
             {
                 auto loc = get_input_location(g, *link_input_node, link_input_pin);
                 g.draw_circle(loc, 7, {1,1,1,1});
-                p3 = float2(loc);
+                p1 = float2(loc);
             }
-            const auto p1 = float2((p0.x+p3.x)/2, p0.y), p2 = float2((p0.x+p3.x)/2, p3.y);
-            g.draw_bezier_curve(p0, p1, p2, p3, 2, {1,1,1,1});
+            draw_wire(g, p0, p1);
 
             if(g.check_release(ID_NEW_WIRE)) reset_link();
         }
