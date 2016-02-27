@@ -23,8 +23,8 @@
     <ClInclude Include="draw2D.h" />
     <ClInclude Include="geometry.h" />
     <ClInclude Include="input.h" />
-    <ClInclude Include="linalg.h" />
     <ClInclude Include="load.h" />
+    <ClInclude Include="rect.h" />
     <ClInclude Include="ui.h" />
     <ClInclude Include="ui3D.h" />
   </ItemGroup>

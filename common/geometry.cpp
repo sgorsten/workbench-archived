@@ -171,7 +171,7 @@ geometry_mesh make_lathed_geometry(const float3 & axis, const float3 & arm1, con
         const float angle = static_cast<float>(i%slices) * tau / slices, c = std::cos(angle), s = std::sin(angle);
         const float3x2 mat = {axis, arm1 * c + arm2 * s};
         float3 n = normalize(mat.y); // TODO: Proper normals for each segment
-        for(auto & p : points) mesh.vertices.push_back({mat * p, n});
+        for(auto & p : points) mesh.vertices.push_back({mul(mat,p), n});
 
         if(i > 0)
         {

@@ -4,10 +4,10 @@
 #ifndef GEOMETRY_H
 #define GEOMETRY_H
 
-#include "linalg.h" 
-#include <vector>
-
+#include "../thirdparty/linalg/linalg.h" 
 using namespace linalg::aliases; // NOTE: Unfriendly in a *.h file, but this file will later be consolidated into a namespace
+
+#include <vector>
 
 const float tau = 6.2831853f; // The circle constant, sometimes referred to as 2*pi
 

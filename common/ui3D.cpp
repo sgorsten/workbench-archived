@@ -7,7 +7,7 @@ ray camera::get_ray_from_pixel(const float2 & pixel, const rect & viewport) cons
 {
     const float x = 2 * (pixel.x - viewport.x0) / viewport.width() - 1, y = 1 - 2 * (pixel.y - viewport.y0) / viewport.height();
     const float4x4 inv_view_proj = inverse(get_viewproj_matrix(viewport));
-    const float4 p0 = inv_view_proj * float4(x, y, -1, 1), p1 = inv_view_proj * float4(x, y, +1, 1);
+    const float4 p0 = mul(inv_view_proj, float4(x, y, -1, 1)), p1 = mul(inv_view_proj, float4(x, y, +1, 1));
     return {position, p1.xyz()*p0.w - p0.xyz()*p1.w};
 }
 

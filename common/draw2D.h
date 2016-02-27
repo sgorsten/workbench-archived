@@ -9,8 +9,7 @@
 #ifndef DRAW_2D_H
 #define DRAW_2D_H
 
-#include "linalg.h"
-using namespace linalg::aliases;
+#include "rect.h"
 
 #include <memory>   // For std::shared_ptr<T>
 #include <vector>   // For std::vector<T>

@@ -4,7 +4,7 @@
 #ifndef INPUT_H
 #define INPUT_H
 
-#include "linalg.h"
+#include "../thirdparty/linalg/linalg.h"
 using namespace linalg::aliases;
 
 #include <vector>

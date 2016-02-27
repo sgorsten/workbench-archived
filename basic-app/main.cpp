@@ -339,7 +339,7 @@ void viewport_ui(gui3D & g, int id, rect r, std::vector<scene_object *> & object
         if(g.bl) move -= qxdir(orientation);
         if(g.bb) move += qzdir(orientation);
         if(g.br) move += qxdir(orientation);
-        if(mag2(move) > 0) g.cam.position += normalize(move) * (g.timestep * 8);
+        if(length2(move) > 0) g.cam.position += normalize(move) * (g.timestep * 8);
     }
 }
 

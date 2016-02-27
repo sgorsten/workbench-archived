@@ -11,8 +11,7 @@
 
 #include <GL\glew.h>
 
-#include "linalg.h"
-using namespace linalg::aliases;
+#include "rect.h"
 
 enum class byte : uint8_t {};
 enum class native_type { float_, double_, int_, unsigned_int, bool_ };
@@ -40,7 +39,7 @@ struct uniform_desc
 
     template<class T> void set_element_value(byte buffer[], int element, const T & value) const { set_component_value(buffer, 0, 0, element, value); }
     template<class T, int M> void set_element_value(byte buffer[], int element, const linalg::vec<T,M> & value) const { for(int i=0; i<M; ++i) set_component_value(buffer, i, 0, element, value[i]); }
-    template<class T, int M, int N> void set_element_value(byte buffer[], int element, const linalg::mat<T,M,N> & value) const { for(int j=0; j<N; ++j) for(int i=0; i<M; ++i) set_component_value(buffer, i, j, element, value(i,j)); }
+    template<class T, int M, int N> void set_element_value(byte buffer[], int element, const linalg::mat<T,M,N> & value) const { for(int j=0; j<N; ++j) for(int i=0; i<M; ++i) set_component_value(buffer, i, j, element, value[j][i]); }
 
     template<class T> void set_value(byte buffer[], const T & value) const { set_element_value(buffer, 0, value); }
 };
