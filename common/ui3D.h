@@ -15,7 +15,7 @@ struct camera
     float pitch, yaw;
     float4 get_orientation() const { return qmul(rotation_quat(float3(0,1,0), yaw), rotation_quat(float3(1,0,0), pitch)); }
     float4x4 get_view_matrix() const { return mul(rotation_matrix(qconj(get_orientation())), translation_matrix(-position)); }
-    float4x4 get_projection_matrix(const rect & viewport) const { return perspective_matrix(yfov, viewport.aspect_ratio(), near_clip, far_clip); }
+    float4x4 get_projection_matrix(const rect & viewport) const { return linalg::perspective_matrix(yfov, viewport.aspect_ratio(), near_clip, far_clip); }
     float4x4 get_viewproj_matrix(const rect & viewport) const { return mul(get_projection_matrix(viewport), get_view_matrix()); }
     ray get_ray_from_pixel(const float2 & pixel, const rect & viewport) const;
 };
