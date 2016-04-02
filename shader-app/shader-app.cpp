@@ -183,7 +183,7 @@ int main(int argc, char * argv[]) try
             if(bl) move -= qxdir(orientation);
             if(bb) move += qzdir(orientation);
             if(br) move += qxdir(orientation);
-            if(mag2(move) > 0) cam.position += normalize(move) * (timestep * 8);
+            if(length2(move) > 0) cam.position += normalize(move) * (timestep * 8);
         }
 
         int w, h;

@@ -23,6 +23,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{9899DE76
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{88DEA505-6C3D-4B13-A95A-6F3E1C9990E6}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "render-app", "render-app\render-app.vcxproj", "{D5098661-AAB7-4EA7-B124-46D753D0F697}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Mixed Platforms = Debug|Mixed Platforms
@@ -105,6 +107,18 @@ Global
 		{03E7327D-58B1-486D-BD6D-412E4E2EE89D}.Release|Win32.Build.0 = Release|Win32
 		{03E7327D-58B1-486D-BD6D-412E4E2EE89D}.Release|x64.ActiveCfg = Release|x64
 		{03E7327D-58B1-486D-BD6D-412E4E2EE89D}.Release|x64.Build.0 = Release|x64
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Debug|Mixed Platforms.ActiveCfg = Debug|Win32
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Debug|Mixed Platforms.Build.0 = Debug|Win32
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Debug|Win32.ActiveCfg = Debug|Win32
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Debug|Win32.Build.0 = Debug|Win32
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Debug|x64.ActiveCfg = Debug|x64
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Debug|x64.Build.0 = Debug|x64
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Release|Mixed Platforms.ActiveCfg = Release|Win32
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Release|Mixed Platforms.Build.0 = Release|Win32
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Release|Win32.ActiveCfg = Release|Win32
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Release|Win32.Build.0 = Release|Win32
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Release|x64.ActiveCfg = Release|x64
+		{D5098661-AAB7-4EA7-B124-46D753D0F697}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -117,5 +131,6 @@ Global
 		{3D0778ED-79DF-40A4-A7D3-344BBC75DE07} = {9899DE76-12F4-410D-B612-E8E92F711776}
 		{DF7F7F2F-B7EE-4AE3-BA4D-9186D6CCFC98} = {9899DE76-12F4-410D-B612-E8E92F711776}
 		{03E7327D-58B1-486D-BD6D-412E4E2EE89D} = {88DEA505-6C3D-4B13-A95A-6F3E1C9990E6}
+		{D5098661-AAB7-4EA7-B124-46D753D0F697} = {9899DE76-12F4-410D-B612-E8E92F711776}
 	EndGlobalSection
 EndGlobal
