@@ -160,12 +160,12 @@ mesh make_beveled_box_mesh(uint32_t n)
     return {vao, GL_QUADS, quads.size()*4, GL_UNSIGNED_INT};
 }
 
-void draw_beveled_box(const mesh & box, GLuint program, const float4x4 & model_matrix, const float3 & neg_bevels, const float3 & half_dims, const float3 & pos_bevels)
+void draw_beveled_box(const mesh & box, GLuint program, const float4x4 & model_matrix, const float3 & neg_bevels, const float3 & half_inner, const float3 & pos_bevels)
 {
     set_uniform(program, "u_model_matrix", model_matrix);
     set_uniform(program, "u_normal_matrix", inverse(transpose(model_matrix)));
-    set_uniform(program, "u_part_offsets[0]", -half_dims);
-    set_uniform(program, "u_part_offsets[1]", half_dims);
+    set_uniform(program, "u_part_offsets[0]", -half_inner);
+    set_uniform(program, "u_part_offsets[1]", half_inner);
     set_uniform(program, "u_part_scales[0]", neg_bevels);
     set_uniform(program, "u_part_scales[1]", pos_bevels);
     glUseProgram(program);
@@ -260,11 +260,13 @@ int main() try
         set_uniform(prog, "u_view_proj_matrix", mul(linalg::perspective_matrix(1.0f, (float)1280/720, 0.1f, 100.f), rotation_matrix(qconj(cam_orientation)), translation_matrix(-cam_position)));
         set_uniform(prog, "u_light_direction", normalize(float3(0.2f,1.0f,0.5f)));
         set_uniform(prog, "u_eye_position", cam_position);
-        draw_beveled_box(box, prog, translation_matrix(float3(-4, 0,-5)), float3(0.25f), float3(0,0.25f,0), float3(0.25f));
-        draw_beveled_box(box, prog, translation_matrix(float3(-2, 0,-5)), float3(0.2f), float3(0.2f), float3(0.2f));
-        draw_beveled_box(box, prog, translation_matrix(float3( 0, 0,-5)), float3(0.45f), float3(), float3(0.45f));
-        draw_beveled_box(box, prog, translation_matrix(float3(+2, 0,-5)), float3(0.4f,0,0.4f), float3(0,0.45f,0), float3(0.4f,0,0.4f));
-        draw_beveled_box(box, prog, translation_matrix(float3(+4,-0.1f,-5)), float3(0.3f,0.4f,0.3f), float3(), float3(0.3f,0.5f,0.3f));
+        draw_beveled_box(box, prog, translation_matrix(float3(-3.3f, 0,-5)), float3(0.4f,0.4f,0), float3(0,0,0.05f), float3(0.4f,0.4f,0));
+        draw_beveled_box(box, prog, translation_matrix(float3(-2.2f, 0,-5)), float3(0.25f), float3(0,0.25f,0), float3(0.25f));
+        draw_beveled_box(box, prog, translation_matrix(float3(-1.1f, 0,-5)), float3(0.2f), float3(0.2f), float3(0.2f));
+        draw_beveled_box(box, prog, translation_matrix(float3( 0.0f, 0,-5)), float3(0.45f), float3(), float3(0.45f));
+        draw_beveled_box(box, prog, translation_matrix(float3(+1.1f, 0,-5)), float3(0.4f,0,0.4f), float3(0,0.45f,0), float3(0.4f,0,0.4f));
+        draw_beveled_box(box, prog, translation_matrix(float3(+2.2f,-0.1f,-5)), float3(0.3f,0.4f,0.3f), float3(), float3(0.3f,0.5f,0.3f));
+        draw_beveled_box(box, prog, translation_matrix(float3(+3.3f, 0,-5)), float3(), float3(0.35f), float3());
         glfwSwapBuffers(win);
     }
 
