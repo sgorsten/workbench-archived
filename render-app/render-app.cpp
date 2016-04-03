@@ -73,14 +73,8 @@ GLuint make_beveled_box_vertex_shader()
     )"});
 }
 
-#include <iostream>
-
 mesh make_beveled_box_mesh(int n) 
 {
-    GLuint vao;
-    glGenVertexArrays(1,&vao);
-    glBindVertexArray(vao);
-
     GLuint buffers[2];
     glGenBuffers(2, buffers);
     glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
@@ -101,10 +95,12 @@ mesh make_beveled_box_mesh(int n)
         }
     };
     glUnmapBuffer(GL_ARRAY_BUFFER);
+
+    GLuint vao;
+    glGenVertexArrays(1,&vao);
+    glBindVertexArray(vao);
     glEnableVertexAttribArray(0); glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (const GLvoid *)offsetof(vertex, normal));
     glEnableVertexAttribArray(1); glVertexAttribIPointer(1, 1, GL_INT, sizeof(vertex), (const GLvoid *)offsetof(vertex, part));
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint4)*(n*2+1)*(n*2+1)*6, nullptr, GL_STATIC_DRAW);
     auto quads = reinterpret_cast<uint4 *>(glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY));
@@ -112,7 +108,7 @@ mesh make_beveled_box_mesh(int n)
     glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
 
     glBindVertexArray(0);
-
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     return {vao, GL_QUADS, (GLsizei)(n*2+1)*(n*2+1)*24, GL_UNSIGNED_INT};
 }
 
