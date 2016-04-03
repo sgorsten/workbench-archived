@@ -5,7 +5,6 @@ using namespace linalg::aliases;
 #include <GLFW/glfw3.h>
 #pragma comment(lib, "opengl32.lib")
 
-#include <vector>
 #include <string>
 #include <chrono>
 #include <thread>
@@ -76,28 +75,8 @@ GLuint make_beveled_box_vertex_shader()
 
 #include <iostream>
 
-mesh make_beveled_box_mesh(uint32_t n) 
+mesh make_beveled_box_mesh(int n) 
 {
-    struct vertex { float3 normal; int part; };
-    std::vector<vertex> vertices; vertices.reserve((n+1)*(n+1)*24);
-    std::vector<uint4> quads; quads.reserve((n*2+1)*(n*2+1)*6);
-    for(auto & s : std::initializer_list<float3x2>{{{1,0,0},{0,1,0}}, {{-1,0,0},{0,1,0}}, {{0,1,0},{0,0,1}}, {{0,-1,0},{0,0,1}}, {{0,0,1},{1,0,0}}, {{0,0,-1},{1,0,0}}})
-    {
-        const auto part = [](float3 corner) { return (corner.x>0)<<0 | (corner.y>0)<<1 | (corner.z>0)<<2; };
-        const auto base = static_cast<uint32_t>(vertices.size());
-        for(uint32_t i=0; i<=n; ++i)
-        {
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(cross(s.x,s.y) - s.x*((n-j)/float(n)) - s.y*((n-i)/float(n))), part(cross(s.x,s.y)-s.x-s.y)});
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(cross(s.x,s.y) + s.x*((0+j)/float(n)) - s.y*((n-i)/float(n))), part(cross(s.x,s.y)+s.x-s.y)});
-        }
-        for(uint32_t i=0; i<=n; ++i)
-        {
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(cross(s.x,s.y) - s.x*((n-j)/float(n)) + s.y*((0+i)/float(n))), part(cross(s.x,s.y)-s.x+s.y)});
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(cross(s.x,s.y) + s.x*((0+j)/float(n)) + s.y*((0+i)/float(n))), part(cross(s.x,s.y)+s.x+s.y)});
-        }
-        for(uint32_t i=1, m=2*(n+1); i<m; ++i) for(uint32_t j=1; j<m; ++j) quads.push_back({base+(i-1)*m+j-1, base+(i-1)*m+j, base+i*m+j, base+i*m+j-1});
-    };
-
     GLuint vao;
     glGenVertexArrays(1,&vao);
     glBindVertexArray(vao);
@@ -105,16 +84,36 @@ mesh make_beveled_box_mesh(uint32_t n)
     GLuint buffers[2];
     glGenBuffers(2, buffers);
     glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex)*vertices.size(), vertices.data(), GL_STATIC_DRAW);
+    struct vertex { float3 normal; int part; vertex(float3 normal, float3 corner) : normal(normal), part((corner.x>0)<<0 | (corner.y>0)<<1 | (corner.z>0)<<2) {} };
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex)*(n+1)*(n+1)*24, nullptr, GL_STATIC_DRAW);
+    auto vertices = reinterpret_cast<vertex *>(glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY));
+    for(auto & s : std::initializer_list<float3x2>{{{1,0,0},{0,1,0}}, {{-1,0,0},{0,1,0}}, {{0,1,0},{0,0,1}}, {{0,-1,0},{0,0,1}}, {{0,0,1},{1,0,0}}, {{0,0,-1},{1,0,0}}})
+    {
+        for(int i=0; i<=n; ++i)
+        {
+            for(int j=0; j<=n; ++j) *vertices++ = {normalize(cross(s.x,s.y) - s.x*((n-j)/float(n)) - s.y*((n-i)/float(n))), cross(s.x,s.y)-s.x-s.y};
+            for(int j=0; j<=n; ++j) *vertices++ = {normalize(cross(s.x,s.y) + s.x*((0+j)/float(n)) - s.y*((n-i)/float(n))), cross(s.x,s.y)+s.x-s.y};
+        }
+        for(int i=0; i<=n; ++i)
+        {
+            for(int j=0; j<=n; ++j) *vertices++ = {normalize(cross(s.x,s.y) - s.x*((n-j)/float(n)) + s.y*((0+i)/float(n))), cross(s.x,s.y)-s.x+s.y};
+            for(int j=0; j<=n; ++j) *vertices++ = {normalize(cross(s.x,s.y) + s.x*((0+j)/float(n)) + s.y*((0+i)/float(n))), cross(s.x,s.y)+s.x+s.y};
+        }
+    };
+    glUnmapBuffer(GL_ARRAY_BUFFER);
     glEnableVertexAttribArray(0); glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (const GLvoid *)offsetof(vertex, normal));
     glEnableVertexAttribArray(1); glVertexAttribIPointer(1, 1, GL_INT, sizeof(vertex), (const GLvoid *)offsetof(vertex, part));
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint4)*quads.size(), quads.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint4)*(n*2+1)*(n*2+1)*6, nullptr, GL_STATIC_DRAW);
+    auto quads = reinterpret_cast<uint4 *>(glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY));
+    for(uint32_t k=0, m=2*(n+1); k<6; ++k) for(uint32_t i=1; i<m; ++i) for(uint32_t j=1; j<m; ++j) *quads++ = uint4((i-1)*m+j-1, (i-1)*m+j, i*m+j, i*m+j-1) + k*m*m;
+    glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+
     glBindVertexArray(0);
 
-    return {vao, GL_QUADS, (GLsizei)quads.size()*4, GL_UNSIGNED_INT};
+    return {vao, GL_QUADS, (GLsizei)(n*2+1)*(n*2+1)*24, GL_UNSIGNED_INT};
 }
 
 void draw_beveled_box(const mesh & box, GLuint program, const float4x4 & model_matrix, const float3 & neg_bevels, const float3 & half_inner, const float3 & pos_bevels)
