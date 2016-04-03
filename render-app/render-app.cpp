@@ -75,71 +75,38 @@ GLuint make_beveled_box_vertex_shader()
     )"});
 }
 
-// Produces a mesh with exactly (n+1)*(n+1)*24 vertices and 24*n*n + 24*n + 6 quads
+#include <iostream>
+
 mesh make_beveled_box_mesh(uint32_t n) 
 {
-    struct vertex { float3 normal; int part; bool operator == (const vertex & v) { return normal==v.normal && part==v.part; } };
-    std::vector<vertex> vertices;
-    std::vector<uint4> quads;
-
-    // Generate vertices and quads for the eight corners
-    const float fn = static_cast<float>(n);
-    auto add_corner_grid = [&vertices, &quads, n, fn](const float3 & norm, const float3 & tan, const float3 & bitan, int part)
+    struct vertex { float3 normal; int part; };
+    std::vector<vertex> vertices; vertices.reserve((n+1)*(n+1)*24);
+    std::vector<uint4> quads; quads.reserve((n*2+1)*(n*2+1)*6);
+    auto make_side = [&vertices, &quads, n](float3 norm, float3 tan, float3 bitan)
     {
-        const uint32_t base = vertices.size();
-        for(uint32_t i=0; i<=n; ++i) for(int j=0; j<=n; ++j)
+        const auto make_part = [](int3 bits) { return bits.x<<0 | bits.y<<1 | bits.z<<2; };
+        const float fn = static_cast<float>(n);
+        const uint32_t base = vertices.size(), m = 2*(n+1);
+        const int3 itan = (int3(tan)+1)/2, ibitan = (int3(bitan)+1)/2, inorm = (int3(norm)+1)/2;
+        for(uint32_t i=0; i<=n; ++i)
         {
-            const float3 normal = normalize(norm + tan*(i/fn) + bitan*(j/fn));
-            vertices.push_back({normal, part});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm - tan*((n-j)/fn) - bitan*((n-i)/fn)), make_part(inorm)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm + tan*((0+j)/fn) - bitan*((n-i)/fn)), make_part(inorm+itan)});
         }
-        for(uint32_t i=0; i<n; ++i) for(int j=0; j<n; ++j) quads.push_back(base + uint4((i+0)*(n+1)+j+0, (i+1)*(n+1)+j+0, (i+1)*(n+1)+j+1, (i+0)*(n+1)+j+1));    
+        for(uint32_t i=0; i<=n; ++i)
+        {
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm - tan*((n-j)/fn) + bitan*((0+i)/fn)), make_part(inorm+ibitan)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm + tan*((0+j)/fn) + bitan*((0+i)/fn)), make_part(inorm+itan+ibitan)});
+        }
+        if(sum(norm) > 0) for(uint32_t i=1; i<m; ++i) for(uint32_t j=1; j<m; ++j) quads.push_back({base+(i-1)*m+j-1, base+(i-1)*m+j, base+i*m+j, base+i*m+j-1});
+        else for(uint32_t i=1; i<m; ++i) for(uint32_t j=1; j<m; ++j) quads.push_back({base+(i-1)*m+j-1, base+i*m+j-1, base+i*m+j, base+(i-1)*m+j,});
     };
-    auto make_part = [](int3 bits) { return bits.x<<0 | bits.y<<1 | bits.z<<2; };
-    for(int x : {0,1}) for(int y : {0,1}) for(int z : {0,1})
-    {
-        add_corner_grid({1,0,0}, {0,1,0}, {0,0,1}, make_part({x,y,z}));
-        add_corner_grid({0,1,0}, {0,0,1}, {1,0,0}, make_part({x,y,z}));
-        add_corner_grid({0,0,1}, {1,0,0}, {0,1,0}, make_part({x,y,z}));
-    } 
-
-    // Generate quads for the six faces, using existing vertices
-    auto find_vertex = [&vertices](const vertex & v) { return uint32_t(std::find(begin(vertices), end(vertices), v) - begin(vertices)); };
-    const auto add_face = [&quads, find_vertex, make_part](const float3 & norm, const int3 & part, const int3 & tan, const int3 & bitan)
-    {
-        quads.push_back({
-            find_vertex({norm, make_part(part)}),
-            find_vertex({norm, make_part(part + tan)}),
-            find_vertex({norm, make_part(part + tan + bitan)}),
-            find_vertex({norm, make_part(part + bitan)})
-        });
-    };
-    for(int x : {0,1}) add_face({1,0,0}, {x,0,0}, {0,1,0}, {0,0,1});
-    for(int y : {0,1}) add_face({0,1,0}, {0,y,0}, {0,0,1}, {1,0,0});
-    for(int z : {0,1}) add_face({0,0,1}, {0,0,z}, {1,0,0}, {0,1,0});
-
-    // Generate quads for the twelve edges, using existing vertices
-    const auto add_edge = [&quads, find_vertex, make_part, n, fn](const float3 & norm, const float3 & binorm, const int3 & part, const int3 & tan)
-    {
-        for(uint32_t i=0; i<n; ++i) quads.push_back({
-            find_vertex({normalize(norm*(i/fn) + binorm), make_part(part)}),
-            find_vertex({normalize(norm*((i+1)/fn) + binorm), make_part(part)}),
-            find_vertex({normalize(norm*((i+1)/fn) + binorm), make_part(part + tan)}),
-            find_vertex({normalize(norm*(i/fn) + binorm), make_part(part + tan)})
-        });
-        for(uint32_t i=0; i<n; ++i) quads.push_back({
-            find_vertex({normalize(norm + binorm*(i/fn)), make_part(part)}),
-            find_vertex({normalize(norm + binorm*(i/fn)), make_part(part + tan)}),
-            find_vertex({normalize(norm + binorm*((i+1)/fn)), make_part(part + tan)}),
-            find_vertex({normalize(norm + binorm*((i+1)/fn)), make_part(part)})
-        });
-    };
-    for(int y : {0,1}) for(int z : {0,1}) add_edge({0,1,0}, {0,0,1}, {0,y,z}, {1,0,0});
-    for(int z : {0,1}) for(int x : {0,1}) add_edge({0,0,1}, {1,0,0}, {x,0,z}, {0,1,0});
-    for(int x : {0,1}) for(int y : {0,1}) add_edge({1,0,0}, {0,1,0}, {x,y,0}, {0,0,1});
-
-    // Scale vertices in the negative bevels by -1, and invert quads to maintain consistent winding
-    for(auto & v : vertices) v.normal *= float3((v.part&1) ? 1 : -1, (v.part&2) ? 1 : -1, (v.part&4) ? 1 : -1);
-    for(auto & q : quads) if(!(vertices[q.x].part&1) ^ !(vertices[q.x].part&2) ^ !(vertices[q.x].part&4)) q = uint4(q.w,q.z,q.y,q.x);
+    make_side({+1,0,0}, {0,1,0}, {0,0,1});
+    make_side({-1,0,0}, {0,1,0}, {0,0,1});
+    make_side({0,+1,0}, {0,0,1}, {1,0,0});
+    make_side({0,-1,0}, {0,0,1}, {1,0,0});
+    make_side({0,0,+1}, {1,0,0}, {0,1,0});
+    make_side({0,0,-1}, {1,0,0}, {0,1,0});
 
     GLuint vao;
     glGenVertexArrays(1,&vao);
@@ -260,13 +227,13 @@ int main() try
         set_uniform(prog, "u_view_proj_matrix", mul(linalg::perspective_matrix(1.0f, (float)1280/720, 0.1f, 100.f), rotation_matrix(qconj(cam_orientation)), translation_matrix(-cam_position)));
         set_uniform(prog, "u_light_direction", normalize(float3(0.2f,1.0f,0.5f)));
         set_uniform(prog, "u_eye_position", cam_position);
-        draw_beveled_box(box, prog, translation_matrix(float3(-3.3f, 0,-5)), float3(0.4f,0.4f,0), float3(0,0,0.05f), float3(0.4f,0.4f,0));
-        draw_beveled_box(box, prog, translation_matrix(float3(-2.2f, 0,-5)), float3(0.25f), float3(0,0.25f,0), float3(0.25f));
-        draw_beveled_box(box, prog, translation_matrix(float3(-1.1f, 0,-5)), float3(0.2f), float3(0.2f), float3(0.2f));
-        draw_beveled_box(box, prog, translation_matrix(float3( 0.0f, 0,-5)), float3(0.45f), float3(), float3(0.45f));
-        draw_beveled_box(box, prog, translation_matrix(float3(+1.1f, 0,-5)), float3(0.4f,0,0.4f), float3(0,0.45f,0), float3(0.4f,0,0.4f));
+        draw_beveled_box(box, prog, translation_matrix(float3(-3.3f, 0,-5)),    float3(0.4f,0.4f,0), float3(0,0,0.05f), float3(0.4f,0.4f,0));
+        draw_beveled_box(box, prog, translation_matrix(float3(-2.2f, 0,-5)),    float3(0.25f), float3(0,0.25f,0), float3(0.25f));
+        draw_beveled_box(box, prog, translation_matrix(float3(-1.1f, 0,-5)),    float3(0.2f), float3(0.2f), float3(0.2f));
+        draw_beveled_box(box, prog, translation_matrix(float3( 0.0f, 0,-5)),    float3(0.45f), float3(), float3(0.45f));
+        draw_beveled_box(box, prog, translation_matrix(float3(+1.1f, 0,-5)),    float3(0.4f,0,0.4f), float3(0,0.45f,0), float3(0.4f,0,0.4f));
         draw_beveled_box(box, prog, translation_matrix(float3(+2.2f,-0.1f,-5)), float3(0.3f,0.4f,0.3f), float3(), float3(0.3f,0.5f,0.3f));
-        draw_beveled_box(box, prog, translation_matrix(float3(+3.3f, 0,-5)), float3(), float3(0.35f), float3());
+        draw_beveled_box(box, prog, translation_matrix(float3(+3.3f, 0,-5)),    float3(), float3(0.35f), float3());
         glfwSwapBuffers(win);
     }
 
