@@ -81,27 +81,22 @@ mesh make_beveled_box_mesh(uint32_t n)
     struct vertex { float3 normal; int part; };
     std::vector<vertex> vertices; vertices.reserve((n+1)*(n+1)*24);
     std::vector<uint4> quads; quads.reserve((n*2+1)*(n*2+1)*6);
-    const auto make_side = [&vertices, &quads, n](float3 norm, float3 tan, float3 bitan)
+    for(auto & s : std::initializer_list<float3x2>{{{1,0,0},{0,1,0}}, {{-1,0,0},{0,1,0}}, {{0,1,0},{0,0,1}}, {{0,-1,0},{0,0,1}}, {{0,0,1},{1,0,0}}, {{0,0,-1},{1,0,0}}})
     {
-        const float fn = static_cast<float>(n);
-        const int3 inorm = (int3(norm)+1)/2, itan = int3(tan), ibitan = int3(bitan);
-        const auto part_index = [](int3 bits) { return bits.x<<0 | bits.y<<1 | bits.z<<2; };
-        const uint32_t base = (uint32_t)vertices.size(), m = 2*(n+1);
+        const auto part = [](float3 corner) { return (corner.x>0)<<0 | (corner.y>0)<<1 | (corner.z>0)<<2; };
+        const auto base = static_cast<uint32_t>(vertices.size());
         for(uint32_t i=0; i<=n; ++i)
         {
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm - tan*((n-j)/fn) - bitan*((n-i)/fn)), part_index(inorm)});
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm + tan*((0+j)/fn) - bitan*((n-i)/fn)), part_index(inorm+itan)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(cross(s.x,s.y) - s.x*((n-j)/float(n)) - s.y*((n-i)/float(n))), part(cross(s.x,s.y)-s.x-s.y)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(cross(s.x,s.y) + s.x*((0+j)/float(n)) - s.y*((n-i)/float(n))), part(cross(s.x,s.y)+s.x-s.y)});
         }
         for(uint32_t i=0; i<=n; ++i)
         {
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm - tan*((n-j)/fn) + bitan*((0+i)/fn)), part_index(inorm+ibitan)});
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm + tan*((0+j)/fn) + bitan*((0+i)/fn)), part_index(inorm+itan+ibitan)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(cross(s.x,s.y) - s.x*((n-j)/float(n)) + s.y*((0+i)/float(n))), part(cross(s.x,s.y)-s.x+s.y)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(cross(s.x,s.y) + s.x*((0+j)/float(n)) + s.y*((0+i)/float(n))), part(cross(s.x,s.y)+s.x+s.y)});
         }
-        for(uint32_t i=1; i<m; ++i) for(uint32_t j=1; j<m; ++j) quads.push_back({base+(i-1)*m+j-1, base+(i-1)*m+j, base+i*m+j, base+i*m+j-1});
+        for(uint32_t i=1, m=2*(n+1); i<m; ++i) for(uint32_t j=1; j<m; ++j) quads.push_back({base+(i-1)*m+j-1, base+(i-1)*m+j, base+i*m+j, base+i*m+j-1});
     };
-    make_side({+1,0,0}, {0,1,0}, {0,0,1}); make_side({0,+1,0}, {0,0,1}, {1,0,0}); make_side({0,0,+1}, {1,0,0}, {0,1,0});
-    make_side({-1,0,0}, {0,1,0}, {0,0,1}); make_side({0,-1,0}, {0,0,1}, {1,0,0}); make_side({0,0,-1}, {1,0,0}, {0,1,0});
-    for(auto it = begin(quads) + quads.size()/2; it != end(quads); ++it) std::swap(it->y, it->w);
 
     GLuint vao;
     glGenVertexArrays(1,&vao);
