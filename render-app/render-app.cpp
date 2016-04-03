@@ -9,12 +9,11 @@ using namespace linalg::aliases;
 #include <string>
 #include <chrono>
 #include <thread>
-#include <algorithm>
 
 GLuint compile_shader(GLenum type, std::initializer_list<const char *> sources)
 {
     GLuint shader = glCreateShader(type);
-    glShaderSource(shader, sources.size(), const_cast<const char **>(sources.begin()), nullptr);
+    glShaderSource(shader, (GLsizei)sources.size(), const_cast<const char **>(sources.begin()), nullptr);
     glCompileShader(shader);
 
     GLint status;
@@ -24,7 +23,7 @@ GLuint compile_shader(GLenum type, std::initializer_list<const char *> sources)
         GLint length;
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
         std::string log(length,' ');
-        glGetShaderInfoLog(shader, log.size(), nullptr, &log[0]);
+        glGetShaderInfoLog(shader, length, nullptr, &log[0]);
         glDeleteShader(shader);
         throw std::runtime_error("glCompileShader(...) failed: " + log);
     }
@@ -45,7 +44,7 @@ GLuint link_program(std::initializer_list<GLuint> shaders)
         GLint length;
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
         std::string log(length,' ');
-        glGetProgramInfoLog(program, log.size(), nullptr, &log[0]);
+        glGetProgramInfoLog(program, length, nullptr, &log[0]);
         glDeleteProgram(program);
         throw std::runtime_error("glLinkProgram(...) failed: " + log);
     }
@@ -82,31 +81,27 @@ mesh make_beveled_box_mesh(uint32_t n)
     struct vertex { float3 normal; int part; };
     std::vector<vertex> vertices; vertices.reserve((n+1)*(n+1)*24);
     std::vector<uint4> quads; quads.reserve((n*2+1)*(n*2+1)*6);
-    auto make_side = [&vertices, &quads, n](float3 norm, float3 tan, float3 bitan)
+    const auto make_side = [&vertices, &quads, n](float3 norm, float3 tan, float3 bitan)
     {
-        const auto make_part = [](int3 bits) { return bits.x<<0 | bits.y<<1 | bits.z<<2; };
         const float fn = static_cast<float>(n);
-        const uint32_t base = vertices.size(), m = 2*(n+1);
-        const int3 itan = (int3(tan)+1)/2, ibitan = (int3(bitan)+1)/2, inorm = (int3(norm)+1)/2;
+        const int3 inorm = (int3(norm)+1)/2, itan = int3(tan), ibitan = int3(bitan);
+        const auto part_index = [](int3 bits) { return bits.x<<0 | bits.y<<1 | bits.z<<2; };
+        const uint32_t base = (uint32_t)vertices.size(), m = 2*(n+1);
         for(uint32_t i=0; i<=n; ++i)
         {
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm - tan*((n-j)/fn) - bitan*((n-i)/fn)), make_part(inorm)});
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm + tan*((0+j)/fn) - bitan*((n-i)/fn)), make_part(inorm+itan)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm - tan*((n-j)/fn) - bitan*((n-i)/fn)), part_index(inorm)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm + tan*((0+j)/fn) - bitan*((n-i)/fn)), part_index(inorm+itan)});
         }
         for(uint32_t i=0; i<=n; ++i)
         {
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm - tan*((n-j)/fn) + bitan*((0+i)/fn)), make_part(inorm+ibitan)});
-            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm + tan*((0+j)/fn) + bitan*((0+i)/fn)), make_part(inorm+itan+ibitan)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm - tan*((n-j)/fn) + bitan*((0+i)/fn)), part_index(inorm+ibitan)});
+            for(uint32_t j=0; j<=n; ++j) vertices.push_back({normalize(norm + tan*((0+j)/fn) + bitan*((0+i)/fn)), part_index(inorm+itan+ibitan)});
         }
-        if(sum(norm) > 0) for(uint32_t i=1; i<m; ++i) for(uint32_t j=1; j<m; ++j) quads.push_back({base+(i-1)*m+j-1, base+(i-1)*m+j, base+i*m+j, base+i*m+j-1});
-        else for(uint32_t i=1; i<m; ++i) for(uint32_t j=1; j<m; ++j) quads.push_back({base+(i-1)*m+j-1, base+i*m+j-1, base+i*m+j, base+(i-1)*m+j,});
+        for(uint32_t i=1; i<m; ++i) for(uint32_t j=1; j<m; ++j) quads.push_back({base+(i-1)*m+j-1, base+(i-1)*m+j, base+i*m+j, base+i*m+j-1});
     };
-    make_side({+1,0,0}, {0,1,0}, {0,0,1});
-    make_side({-1,0,0}, {0,1,0}, {0,0,1});
-    make_side({0,+1,0}, {0,0,1}, {1,0,0});
-    make_side({0,-1,0}, {0,0,1}, {1,0,0});
-    make_side({0,0,+1}, {1,0,0}, {0,1,0});
-    make_side({0,0,-1}, {1,0,0}, {0,1,0});
+    make_side({+1,0,0}, {0,1,0}, {0,0,1}); make_side({0,+1,0}, {0,0,1}, {1,0,0}); make_side({0,0,+1}, {1,0,0}, {0,1,0});
+    make_side({-1,0,0}, {0,1,0}, {0,0,1}); make_side({0,-1,0}, {0,0,1}, {1,0,0}); make_side({0,0,-1}, {1,0,0}, {0,1,0});
+    for(auto it = begin(quads) + quads.size()/2; it != end(quads); ++it) std::swap(it->y, it->w);
 
     GLuint vao;
     glGenVertexArrays(1,&vao);
@@ -124,7 +119,7 @@ mesh make_beveled_box_mesh(uint32_t n)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint4)*quads.size(), quads.data(), GL_STATIC_DRAW);
     glBindVertexArray(0);
 
-    return {vao, GL_QUADS, quads.size()*4, GL_UNSIGNED_INT};
+    return {vao, GL_QUADS, (GLsizei)quads.size()*4, GL_UNSIGNED_INT};
 }
 
 void draw_beveled_box(const mesh & box, GLuint program, const float4x4 & model_matrix, const float3 & neg_bevels, const float3 & half_inner, const float3 & pos_bevels)
